@@ -6,16 +6,44 @@
   const plain = (v) => String(v == null ? '' : v).replace(/\*([^*\n]+)\*/g, '$1');
   const en = lang === 'en';
   const L = en ? {
-    skip: 'Skip to content', home: 'home page', mainNav: 'Main navigation', language: 'Language',
+    skip: 'Skip to main content', home: 'home page', mainNav: 'Main navigation', language: 'Language',
     rating: (n) => `Rated ${n} out of 5`, openPhoto: 'Open photo', scroll: 'Scroll down',
     phone: 'Phone', email: 'Email', city: 'City', hours: 'Hours', required: 'required',
-    messengers: 'Message me', footerNav: 'Site sections', reviewsList: 'Reviews', photoOf: 'Photo',
+    messengers: 'Message me', footerNav: 'Site sections', reviewsList: 'Reviews', photoOf: 'Photo viewer',
+    prevPhoto: 'Previous photo', nextPhoto: 'Next photo',
+    requiredNote: 'Fields marked * are required',
+    errName: 'Please enter your name — at least 2 characters.',
+    errContact: 'Please leave a full phone number or Telegram username so I can get back to you.',
+    errFields: 'Please check the highlighted fields.',
   } : {
-    skip: 'Перейти до змісту', home: 'головна сторінка', mainNav: 'Головне меню', language: 'Мова сайту',
+    skip: 'Перейти до основного вмісту', home: 'головна сторінка', mainNav: 'Головне меню', language: 'Мова сайту',
     rating: (n) => `Оцінка ${n} з 5`, openPhoto: 'Відкрити фото', scroll: 'Гортайте донизу',
     phone: 'Телефон', email: 'Email', city: 'Місто', hours: 'Графік', required: 'обов’язкове поле',
-    messengers: 'Напишіть мені', footerNav: 'Розділи сайту', reviewsList: 'Відгуки', photoOf: 'Фото',
+    messengers: 'Напишіть мені', footerNav: 'Розділи сайту', reviewsList: 'Відгуки', photoOf: 'Перегляд фото',
+    prevPhoto: 'Попереднє фото', nextPhoto: 'Наступне фото',
+    requiredNote: 'Поля з * обов’язкові',
+    errName: 'Вкажіть ім’я — щонайменше 2 символи.',
+    errContact: 'Вкажіть повний номер телефону або нік у Telegram, щоб я могла з вами зв’язатися.',
+    errFields: 'Перевірте виділені поля.',
   };
+
+  // ——— Типографіка: тире й короткі слова не лишаються на краю рядка (нерозривний пробіл) ———
+  // Застосовується до абзаців (paras) і службових текстів (kit.ui / kit.typo), не до імен і назв.
+  const NBSP = '\u00a0';
+  const SHORT_WORDS = en
+    ? /(?<=^|[\s(“"])(a|an|I|&|to|of|in|on|at|by)\s+(?=\S)/g
+    : /(?<=^|[\s(«„"])([ВвУуЗзІіЙйАаОоЯя]|та|до|на|за|по|від|не|як|що|чи|із|зі|під|над|без|для)\s+(?=\S)/g;
+  const typo = (v) => String(v == null ? '' : v)
+    .replace(/[ \t]+([—–])/g, `${NBSP}$1`)
+    .replace(SHORT_WORDS, `$1${NBSP}`)
+    .replace(/(\d) (?=\d{3}(?!\d))/g, `$1${NBSP}`);
+  const typoParas = (v) => paras(v).map(typo);
+  // Надзаголовки (великі літери з розрядкою): слово через дефіс («тревел-експертка») і крапку-роздільник
+  // «·» не розриваємо — WORD JOINER після дефіса, нерозривний пробіл перед «·».
+  const WJ = '\u2060';
+  const eyebrow = (v) => typo(v)
+    .replace(/(\p{L})-(?=\p{L})/gu, `$1-${WJ}`)
+    .replace(/[ \t]+·/g, `${NBSP}·`);
 
   // Секції без вмісту не показуємо (і не ведемо на них з меню)
   const hasItems = (d, pred) => Array.isArray(d.items) && d.items.some(pred);
@@ -51,35 +79,42 @@
     formDates: 'Dates', formTravelers: 'Travellers', formMessage: 'Wishes', formSubmit: 'Send request',
     formSending: 'Sending…', formSuccess: 'Thank you! I will get back to you soon.',
     formError: 'Could not send the request. Please try again or message me directly.',
-    contactMe: 'Contact me', menu: 'Menu', close: 'Close', prev: 'Previous', next: 'Next', backToTop: 'Back to top',
+    contactMe: 'Contact me', menu: 'Menu', close: 'Close', prev: 'Previous review', next: 'Next review', backToTop: 'Back to top',
   } : {
     formName: 'Ваше ім’я', formContact: 'Телефон або Telegram', formDestination: 'Куди хочете поїхати',
     formDates: 'Дати', formTravelers: 'Скільки вас', formMessage: 'Побажання', formSubmit: 'Надіслати заявку',
     formSending: 'Надсилаю…', formSuccess: 'Дякую! Я зв’яжуся з вами найближчим часом.',
     formError: 'Не вдалося надіслати заявку. Спробуйте ще раз або напишіть мені в месенджер.',
-    contactMe: 'Зв’язатися зі мною', menu: 'Меню', close: 'Закрити', prev: 'Попередній', next: 'Наступний', backToTop: 'Нагору',
+    contactMe: 'Зв’язатися зі мною', menu: 'Меню', close: 'Закрити', prev: 'Попередній відгук', next: 'Наступний відгук', backToTop: 'Нагору',
   };
-  const uiText = (key) => u(key) || UI_FALLBACK[key] || '';
-  const kit = { esc, emph, plain, L, navItems, shownTypes, homeHref, mark, ui: uiText };
+  const uiText = (key) => typo(u(key) || UI_FALLBACK[key] || '');
+  // Назва бренду для скрінрідерів: «ANNA FROLOVA TRAVEL» великими літерами часто читається по буквах
+  const brandSpoken = [brand.name, brand.tagline].filter(Boolean).join(' ').toLowerCase()
+    .replace(/(^|[\s-])(\S)/g, (m, sep, ch) => sep + ch.toUpperCase());
+  const kit = { esc, emph, plain, L, navItems, shownTypes, homeHref, mark, ui: uiText, typo, eyebrow, brandSpoken };
+  // Власні кольори теми: кольори тексту на кнопках/фоні підбираються під контраст (partials/theme-vars)
+  const themeVars = themeStyle ? include('partials/theme-vars').trim() : '';
+  const htmlStyle = themeStyle + themeVars;
+  const shared = { kit, paras: typoParas };
 -%>
 <!doctype html>
-<html lang="<%= htmlLang %>" data-theme="<%= themePreset %>"<% if (themeStyle) { %> style="<%= themeStyle %>"<% } %> class="no-js<%= hasHero ? ' has-hero' : '' %>">
+<html lang="<%= htmlLang %>" data-theme="<%= themePreset %>"<% if (htmlStyle) { %> style="<%= htmlStyle %>"<% } %> class="no-js<%= hasHero ? ' has-hero' : '' %>">
 <head>
-<%- include('partials/head', { kit }) %>
+<%- include('partials/head', shared) %>
 </head>
 <body>
   <a class="skip-link" href="#main"><%= L.skip %></a>
-<%- include('partials/header', { kit }) %>
+<%- include('partials/header', shared) %>
   <main id="main" tabindex="-1">
 <% if (!hasHero) { %>
     <h1 class="visually-hidden"><%= meta.title || brand.name %></h1>
 <% } -%>
 <% shown.forEach((s, i) => { -%>
-<%- include('partials/sections/' + s.type, { s: s.data, kit, tone: (i % 2 === 0) ? 'base' : 'alt', index: i }) %>
+<%- include('partials/sections/' + s.type, { ...shared, s: s.data, tone: (i % 2 === 0) ? 'base' : 'alt', index: i }) %>
 <% }) -%>
   </main>
-<%- include('partials/footer', { kit }) %>
-<%- include('partials/floating-contact', { kit }) %>
-<%- include('partials/lightbox', { kit }) %>
+<%- include('partials/footer', shared) %>
+<%- include('partials/floating-contact', shared) %>
+<%- include('partials/lightbox', shared) %>
 </body>
 </html>

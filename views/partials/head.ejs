@@ -23,7 +23,7 @@
 <% if (meta.description) { -%>
   <meta property="og:description" content="<%= meta.description %>">
 <% } -%>
-  <meta property="og:locale" content="<%= meta.locale || (lang === 'en' ? 'en_US' : 'uk_UA') %>">
+  <meta property="og:locale" content="<%= meta.locale || (lang === 'en' ? 'en_GB' : 'uk_UA') %>">
 <% (meta.localeAlternates || []).forEach((loc) => { -%>
   <meta property="og:locale:alternate" content="<%= loc %>">
 <% }) -%>
@@ -32,7 +32,9 @@
 <% } -%>
 <% if (meta.ogImage) { -%>
   <meta property="og:image" content="<%= meta.ogImage %>">
+  <meta property="og:image:alt" content="<%= pageTitle %>">
   <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="<%= pageTitle %>">
 <% } -%>
   <link rel="icon" href="<%= asset('/assets/img/favicon.svg') %>" type="image/svg+xml">
   <link rel="icon" href="<%= asset('/assets/img/favicon-32.png') %>" type="image/png" sizes="32x32">

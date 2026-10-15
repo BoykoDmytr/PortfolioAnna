@@ -15,12 +15,14 @@ const ejs = require('ejs');
 const multer = require('multer');
 
 const { schema, ICON_NAMES } = require('./schema');
-const { collectImageRefs } = require('./validate');
-const { ROOT_DIR, loadConfig, dataPaths, projectPaths, normalizeBasePath } = require('./config');
+const { collectImageRefs, charsAtLeast } = require('./validate');
+const { ROOT_DIR, loadConfig, dataPaths, projectPaths, normalizeBasePath, DEFAULT_ADMIN_PASSWORD } = require('./config');
 const { ContentStore, isBackupName, isPlainObject } = require('./content-store');
-const { Auth, setSessionCookie, clearSessionCookie, createRateLimiter, MAX_PASSWORD_LENGTH } = require('./auth');
+const { Auth, setSessionCookie, clearSessionCookie, MAX_PASSWORD_LENGTH } = require('./auth');
+const { createRateLimiter } = require('./limits');
+const { isLocalRequest, createHostGuard, requestOrigin } = require('./net');
 const { MediaStore, uploadMiddleware, PURPOSES } = require('./uploads');
-const { LeadStore, validateLead, leadLang, LEAD_STATUSES } = require('./leads');
+const { LeadStore, validateLead, validateLeadNote, leadLang, LEAD_STATUSES } = require('./leads');
 const { Notifier } = require('./notify');
 const { buildViewModel } = require('./view-model');
 
@@ -37,6 +39,7 @@ const CONTENT_SECURITY_POLICY = [
 ].join('; ');
 
 const RATE_WINDOW_MS = 10 * 60 * 1000;
+const HSTS = 'max-age=15552000'; // 180 днів; лише для відповідей через HTTPS
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -46,9 +49,26 @@ const MSG = {
   notFound: 'Не знайдено',
   loginRequired: 'Потрібно увійти',
   csrf: 'Запит відхилено з міркувань безпеки. Оновіть сторінку адмінки і спробуйте ще раз.',
-  wrongPassword: 'Невірний пароль',
+  wrongPassword: 'Неправильний пароль',
+  wrongCurrentPassword: 'Поточний пароль неправильний',
   invalidFields: 'Перевірте виділені поля',
+  busy: 'Сервер зараз зайнятий. Спробуйте ще раз за хвилину.',
+  contentConflict: 'Сайт щойно змінили на іншому пристрої або в іншій вкладці. Натисніть «Зберегти» ще раз — зміни буде поєднано.',
+  unknownHost: (host) => `Адмінка не відкривається за адресою «${host || '(без адреси)'}». Відкрийте її за адресою localhost або IP-адресою комп’ютера (її показано в терміналі після запуску). Якщо це домен вашого сайту — вкажіть його в «SEO та соцмережі → Адреса сайту» або в змінній ALLOWED_HOSTS.`,
 };
+
+const toAttemptsLeft = (n) => Math.max(0, n);
+
+function tooManyAttempts(retryAfterMs) {
+  const m = Math.max(1, Math.ceil(retryAfterMs / 60000));
+  return `Забагато невдалих спроб. Спробуйте ще раз через ${m} хв.`;
+}
+
+/** If-Match: "abc" | W/"abc" | abc → 'abc' ('' — заголовка немає або '*'). */
+function parseIfMatch(value) {
+  const v = String(value || '').split(',')[0].trim().replace(/^W\//i, '').replace(/^"|"$/g, '');
+  return v === '*' ? '' : v;
+}
 
 function httpError(status, message, details) {
   const err = new Error(message);
@@ -62,16 +82,12 @@ const asyncHandler = (fn) => (req, res, next) => {
   Promise.resolve().then(() => fn(req, res, next)).catch(next);
 };
 
+// За TRUST_PROXY req.ip — справжня адреса відвідувача з X-Forwarded-For, інакше — адреса з'єднання.
 const clientKey = (req) => req.ip || (req.socket && req.socket.remoteAddress) || 'unknown';
 
 function queryString(req) {
   const i = req.originalUrl.indexOf('?');
   return i >= 0 ? req.originalUrl.slice(i) : '';
-}
-
-function minutesText(ms) {
-  const m = Math.max(1, Math.ceil(ms / 60000));
-  return `${m} хв`;
 }
 
 function localDateStamp(date = new Date()) {
@@ -113,6 +129,10 @@ function wantsJson(req) {
  * @param {string} [options.adminPassword]  початковий пароль (лише для першого запуску)
  * @param {string} [options.telegramApiBase]
  * @param {boolean} [options.viewCache]     кешувати шаблони (за замовчуванням — у production)
+ * @param {boolean} [options.production]    робочий режим (NODE_ENV=production): стандартний пароль не діє
+ * @param {*}      [options.trustProxy]     значення для app.set('trust proxy') (TRUST_PROXY)
+ * @param {string[]} [options.allowedHosts] додаткові домени адмінки (ALLOWED_HOSTS)
+ * @param {object} [options.scryptParams]   {N, r, p} для хешу пароля — лише для тестів (швидше)
  * @param {object} [options.logger]
  */
 function createApp(options = {}) {
@@ -121,7 +141,10 @@ function createApp(options = {}) {
   const dataDir = path.resolve(options.dataDir || config.dataDir);
   const basePath = normalizeBasePath(options.basePath);
   const logger = options.logger || console;
-  const viewCache = options.viewCache !== undefined ? Boolean(options.viewCache) : config.production;
+  const production = options.production !== undefined ? Boolean(options.production) : config.production;
+  const viewCache = options.viewCache !== undefined ? Boolean(options.viewCache) : production;
+  const trustProxy = options.trustProxy !== undefined ? options.trustProxy : config.trustProxy;
+  const allowedHosts = options.allowedHosts || config.allowedHosts;
   const paths = { ...projectPaths(rootDir), ...dataPaths(dataDir) };
 
   /* ---------------- сервіси ---------------- */
@@ -131,6 +154,7 @@ function createApp(options = {}) {
   const auth = new Auth({
     authFile: paths.authFile,
     defaultPassword: options.adminPassword || config.adminPassword,
+    scryptParams: options.scryptParams,
     logger,
   }).init();
   const media = new MediaStore({ uploadsDir: paths.uploadsDir, logger });
@@ -148,6 +172,32 @@ function createApp(options = {}) {
 
   const app = express();
   app.disable('x-powered-by');
+  if (trustProxy) app.set('trust proxy', trustProxy);
+
+  const hostGuard = createHostGuard({
+    allowedHosts,
+    trustProxy: Boolean(trustProxy),
+    siteUrl: () => (store.get().seo || {}).siteUrl || '',
+  });
+
+  /**
+   * Стандартний пароль «anna2026» є в інструкції, тож його знає будь-хто. Поки він діє, вхід з ним —
+   * лише з браузера на цьому ж комп'ютері (не з телефона в Wi-Fi і не через інтернет-проксі),
+   * а в робочому режимі (NODE_ENV=production, сервер в інтернеті) — взагалі ні.
+   */
+  const defaultPasswordBlocked = (req) => auth.usingPublicDefault && (production || !isLocalRequest(req));
+
+  function defaultPasswordMessage(req) {
+    if (production) {
+      return 'Стандартний пароль на сервері в інтернеті не діє. Зупиніть сервер, видаліть файл data/private/auth.json '
+        + 'і запустіть сервер знову з власним паролем: ADMIN_PASSWORD="ваш-пароль" (див. README, варіант Б).';
+    }
+    const port = req.socket && req.socket.localPort ? `:${req.socket.localPort}` : '';
+    return 'Пароль ще стандартний (з інструкції), тому з телефона чи іншого пристрою ним увійти не можна — '
+      + 'щоб ніхто сторонній у вашій Wi-Fi не відкрив адмінку. '
+      + `Змініть пароль на комп’ютері, де запущено сайт: http://localhost${port}/admin/ → «Безпека». `
+      + 'Потім входьте з телефона з новим паролем.';
+  }
   app.set('views', paths.viewsDir);
   // Опції передаємо явно: view-model має власне поле `settings`, яке перекриває app.settings.
   app.engine('ejs', (file, data, cb) => ejs.renderFile(file, data, { cache: viewCache }, cb));
@@ -177,7 +227,7 @@ function createApp(options = {}) {
   function renderPage(lang) {
     return (req, res) => {
       const leadStatus = typeof req.query.lead === 'string' ? req.query.lead : null;
-      const vm = buildViewModel(store.get(), lang, { basePath, leadStatus });
+      const vm = buildViewModel(store.get(), lang, { basePath, leadStatus, origin: requestOrigin(req) });
       res.set('Cache-Control', 'no-cache');
       sendHtml(res, 'index', vm);
     };
@@ -199,7 +249,7 @@ function createApp(options = {}) {
       plain();
       return;
     }
-    const vm = { ...buildViewModel(store.get(), lang, { basePath }), status: 404 };
+    const vm = { ...buildViewModel(store.get(), lang, { basePath, origin: requestOrigin(req) }), status: 404 };
     res.set('Cache-Control', 'no-cache');
     res.render('404', vm, (err, html) => {
       if (err) {
@@ -222,6 +272,8 @@ function createApp(options = {}) {
       'Cross-Origin-Opener-Policy': 'same-origin',
       'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
     });
+    // HTTPS (напряму або через проксі з TRUST_PROXY): браузер і надалі ходитиме лише по HTTPS
+    if (req.secure) res.set('Strict-Transport-Security', HSTS);
     next();
   });
 
@@ -339,51 +391,91 @@ function createApp(options = {}) {
 
   // CSRF: будь-який запит, що змінює дані, має містити заголовок X-Admin-Request: 1
   // (його може додати лише JavaScript з нашого ж сайту; звичайна HTML-форма з чужого сайту — ні).
+  // Додатково: якщо браузер вказав Origin, він має збігатися з адресою сайту.
   api.use((req, res, next) => {
-    if (SAFE_METHODS.has(req.method) || req.get('X-Admin-Request') === '1') return next();
+    if (SAFE_METHODS.has(req.method) || (req.get('X-Admin-Request') === '1' && hostGuard.originMatches(req))) return next();
     res.status(403).json({ error: MSG.csrf });
     return undefined;
   });
 
   api.use(express.json({ limit: '2mb' }));
 
-  api.post('/login', asyncHandler(async (req, res) => {
-    const ip = clientKey(req);
-    const limit = loginLimiter.check(ip);
-    if (limit.limited) {
-      res.set('Retry-After', String(Math.ceil(limit.retryAfterMs / 1000)));
-      res.status(429).json({ error: `Забагато невдалих спроб. Спробуйте ще раз через ${minutesText(limit.retryAfterMs)}.` });
-      return;
+  /**
+   * Перевіряє пароль з урахуванням ліміту спроб. Спробу враховано ще ДО перевірки (consume),
+   * тож сотня паралельних запитів не отримає сотню перевірок замість п'яти.
+   * → { ok: true } | { ok: false, attemptsLeft } ; відповідь 429/503 надсилає сама (→ null).
+   */
+  async function checkPassword(req, res, password) {
+    const attempt = loginLimiter.consume(clientKey(req));
+    if (attempt.limited) {
+      res.set('Retry-After', String(Math.ceil(attempt.retryAfterMs / 1000)));
+      res.status(429).json({ error: tooManyAttempts(attempt.retryAfterMs), attemptsLeft: 0 });
+      return null;
     }
+    let ok;
+    try {
+      ok = await auth.verifyPassword(password);
+    } catch (err) {
+      attempt.undo(); // пароль не перевірявся — спробу не рахуємо
+      if (err.code !== 'BUSY') throw err;
+      res.set('Retry-After', '30');
+      res.status(503).json({ error: MSG.busy });
+      return null;
+    }
+    if (!ok) return { ok: false, attemptsLeft: toAttemptsLeft(attempt.remaining) };
+    loginLimiter.reset(clientKey(req));
+    return { ok: true };
+  }
+
+  api.post('/login', asyncHandler(async (req, res) => {
     const password = isPlainObject(req.body) && typeof req.body.password === 'string' ? req.body.password : '';
     if (!password) {
       res.status(400).json({ error: 'Введіть пароль' });
       return;
     }
-    if (!(await auth.verifyPassword(password))) {
-      loginLimiter.hit(ip);
-      res.status(401).json({ error: MSG.wrongPassword });
+    if (password === DEFAULT_ADMIN_PASSWORD && defaultPasswordBlocked(req)) {
+      res.status(403).json({ error: defaultPasswordMessage(req), reason: 'default-password' });
       return;
     }
-    loginLimiter.reset(ip);
+    const result = await checkPassword(req, res, password);
+    if (!result) return;
+    if (!result.ok) {
+      res.status(401).json({ error: MSG.wrongPassword, attemptsLeft: result.attemptsLeft });
+      return;
+    }
     setSessionCookie(req, res, auth.issueToken());
     res.json({ ok: true, mustChangePassword: auth.mustChangePassword });
   }));
 
-  api.post('/logout', (req, res) => {
+  // { everywhere: true } — «Вийти на всіх пристроях» (усі видані входи стають недійсними).
+  // Інакше відкликається лише поточний вхід: навіть скопійована cookie більше не діятиме.
+  api.post('/logout', asyncHandler(async (req, res) => {
+    const token = auth.tokenFrom(req);
+    if (isPlainObject(req.body) && req.body.everywhere === true) {
+      if (!auth.verifyToken(token)) {
+        res.status(401).json({ error: MSG.loginRequired });
+        return;
+      }
+      await auth.revokeAllSessions();
+    } else if (token) {
+      await auth.revokeToken(token).catch((err) => logger.warn(`Не вдалося відкликати сесію: ${err.message}`));
+    }
     clearSessionCookie(req, res);
     res.json({ ok: true });
-  });
+  }));
+
+  // Вхід зі стандартним паролем з іншого пристрою (наприклад, cookie, видана до оновлення) не діє.
+  const isSignedIn = (req) => auth.isAuthenticated(req) && !defaultPasswordBlocked(req);
 
   api.get('/session', (req, res) => {
-    const authenticated = auth.isAuthenticated(req);
+    const authenticated = isSignedIn(req);
     // Ознаку «стандартний пароль» показуємо лише після входу, щоб не підказувати стороннім.
     res.json({ authenticated, mustChangePassword: authenticated && auth.mustChangePassword });
   });
 
   // Усе нижче — лише після входу
   api.use((req, res, next) => {
-    if (auth.isAuthenticated(req)) return next();
+    if (isSignedIn(req)) return next();
     res.status(401).json({ error: MSG.loginRequired });
     return undefined;
   });
@@ -399,16 +491,27 @@ function createApp(options = {}) {
     res.json(out);
   });
 
+  // X-Content-Revision — відбиток збереженого вмісту. Адмінка надсилає його назад в If-Match,
+  // і якщо тим часом сайт зберегли з іншого пристрою, отримує 412 замість тихого затирання чужих змін.
+  const sendRevision = (res) => res.set('X-Content-Revision', store.revision);
+
   api.get('/content', (req, res) => {
+    sendRevision(res);
     res.json(store.get());
   });
 
-  const saveContent = (badShapeMessage) => asyncHandler(async (req, res) => {
+  const saveContent = (badShapeMessage, { checkRevision = false } = {}) => asyncHandler(async (req, res) => {
     let input = req.body;
     // Підтримуємо також обгортку { content: {...} }
     if (isPlainObject(input) && !isPlainObject(input.sections) && isPlainObject(input.content)) input = input.content;
     if (!isPlainObject(input) || !isPlainObject(input.sections)) throw httpError(400, badShapeMessage);
-    const result = await store.save(input);
+    const expectedRevision = checkRevision ? parseIfMatch(req.get('If-Match')) : '';
+    const result = await store.save(input, { expectedRevision });
+    sendRevision(res);
+    if (result.conflict) {
+      res.status(412).json({ error: MSG.contentConflict });
+      return;
+    }
     if (result.errors) {
       res.status(422).json({ error: MSG.invalidFields, details: result.errors });
       return;
@@ -416,7 +519,7 @@ function createApp(options = {}) {
     res.json({ ok: true, content: result.content });
   });
 
-  api.put('/content', saveContent('Некоректні дані: очікувався повний вміст сайту.'));
+  api.put('/content', saveContent('Некоректні дані: очікувався повний вміст сайту.', { checkRevision: true }));
   api.post('/import', saveContent('Це не схоже на файл з вмістом сайту. Оберіть файл, збережений через «Завантажити копію».'));
 
   api.get('/export', (req, res) => {
@@ -455,12 +558,25 @@ function createApp(options = {}) {
     res.json(leads.list());
   });
 
+  // { status } і/або { note } — нотатка для себе (до 1000 символів)
   api.patch('/leads/:id', asyncHandler(async (req, res) => {
-    const status = isPlainObject(req.body) ? req.body.status : undefined;
-    if (!LEAD_STATUSES.includes(status)) {
-      throw httpError(400, 'Невідомий статус заявки', [{ field: 'status', message: 'Оберіть: Нова, В роботі або Завершена' }]);
+    const body = isPlainObject(req.body) ? req.body : {};
+    const changes = {};
+    if (body.status !== undefined) {
+      if (!LEAD_STATUSES.includes(body.status)) {
+        throw httpError(400, 'Невідомий статус заявки', [{ field: 'status', message: 'Оберіть: Нова, У роботі або Завершена' }]);
+      }
+      changes.status = body.status;
     }
-    const lead = await leads.setStatus(req.params.id, status);
+    if (body.note !== undefined) {
+      const note = validateLeadNote(body.note);
+      if (note.error) throw httpError(400, note.error, [{ field: 'note', message: note.error }]);
+      changes.note = note.value;
+    }
+    if (!Object.keys(changes).length) {
+      throw httpError(400, 'Невідомий статус заявки', [{ field: 'status', message: 'Оберіть: Нова, У роботі або Завершена' }]);
+    }
+    const lead = await leads.update(req.params.id, changes);
     if (!lead) throw httpError(404, 'Заявку не знайдено — можливо, її вже видалили.');
     res.json(lead);
   }));
@@ -489,29 +605,34 @@ function createApp(options = {}) {
     const body = isPlainObject(req.body) ? req.body : {};
     const current = typeof body.current === 'string' ? body.current : '';
     const next = typeof body.next === 'string' ? body.next : '';
-    const ip = clientKey(req);
 
     if (!current) throw httpError(400, 'Введіть поточний пароль', [{ field: 'current', message: 'Введіть поточний пароль' }]);
-    const limit = loginLimiter.check(ip);
-    if (limit.limited) {
-      res.set('Retry-After', String(Math.ceil(limit.retryAfterMs / 1000)));
-      throw httpError(429, `Забагато невдалих спроб. Спробуйте ще раз через ${minutesText(limit.retryAfterMs)}.`);
-    }
+    const result = await checkPassword(req, res, current);
+    if (!result) return;
     // Не 401: інакше адмінка вирішить, що сесія завершилась, і поверне на екран входу.
-    if (!(await auth.verifyPassword(current))) {
-      loginLimiter.hit(ip);
-      throw httpError(400, 'Поточний пароль невірний', [{ field: 'current', message: 'Поточний пароль невірний' }]);
+    if (!result.ok) {
+      res.status(400).json({
+        error: MSG.wrongCurrentPassword,
+        details: [{ field: 'current', message: MSG.wrongCurrentPassword }],
+        attemptsLeft: result.attemptsLeft,
+      });
+      return;
     }
     if (next.length < MIN_PASSWORD_LENGTH) {
-      throw httpError(400, `Новий пароль має містити щонайменше ${MIN_PASSWORD_LENGTH} символів`, [
+      throw httpError(400, `Новий пароль має містити ${charsAtLeast(MIN_PASSWORD_LENGTH)}`, [
         { field: 'next', message: `Щонайменше ${MIN_PASSWORD_LENGTH} символів` },
       ]);
     }
     if (next.length > MAX_PASSWORD_LENGTH) {
-      throw httpError(400, 'Занадто довгий пароль', [{ field: 'next', message: `Максимум ${MAX_PASSWORD_LENGTH} символів` }]);
+      throw httpError(400, 'Занадто довгий пароль', [{ field: 'next', message: `Не більше ${MAX_PASSWORD_LENGTH} символів` }]);
     }
     if (next === current) {
       throw httpError(400, 'Новий пароль має відрізнятися від поточного', [{ field: 'next', message: 'Пароль не змінився' }]);
+    }
+    if (next === DEFAULT_ADMIN_PASSWORD) {
+      throw httpError(400, 'Це стандартний пароль з інструкції — його знають усі', [
+        { field: 'next', message: 'Це стандартний пароль з інструкції. Придумайте власний.' },
+      ]);
     }
     await auth.changePassword(next);
     setSessionCookie(req, res, auth.issueToken()); // поточна сесія лишається, інші — завершуються
@@ -559,6 +680,17 @@ function createApp(options = {}) {
   });
 
   /* ---------------- адмінка: інтерфейс ---------------- */
+
+  // DNS rebinding: сторінка чужого сайту, чий домен раптом «вказує» на 127.0.0.1, для браузера
+  // має ту саму адресу, що й адмінка. Такі запити розпізнаємо за доменом у заголовку Host.
+  app.use('/admin', (req, res, next) => {
+    if (hostGuard.allows(req)) return next();
+    const message = MSG.unknownHost(String(req.headers.host || '').slice(0, 100));
+    res.set('Cache-Control', 'no-store');
+    if (isApiPath(req.originalUrl.split('?')[0])) res.status(421).json({ error: message });
+    else res.status(421).type('text/plain; charset=utf-8').send(message);
+    return undefined;
+  });
 
   app.get('/admin', (req, res, next) => {
     if (req.path === '/admin') {

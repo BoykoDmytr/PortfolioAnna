@@ -9,7 +9,7 @@
 <% if (photo) { -%>
       <div class="about__media" data-reveal>
         <div class="arch">
-          <img class="arch__img" src="<%= photo %>" alt="<%= kit.plain(s.signature || t(s.title) || brand.name) %>" loading="lazy" decoding="async">
+          <img class="arch__img" src="<%= photo %>" alt="<%= t(s.photoAlt) || kit.plain(s.signature || t(s.title) || brand.name) %>" loading="lazy" decoding="async">
         </div>
         <span class="about__frame" aria-hidden="true"></span>
         <%- kit.mark('about__mark') %>
@@ -34,7 +34,7 @@
 <% stats.forEach((st, i) => { -%>
       <li class="stats__item" data-reveal style="--d: <%= i %>">
         <span class="stats__value"><%= st.value %></span>
-        <span class="stats__label"><%= t(st.label) %></span>
+        <span class="stats__label"><%= kit.typo(t(st.label)) %></span>
       </li>
 <% }) -%>
     </ul>

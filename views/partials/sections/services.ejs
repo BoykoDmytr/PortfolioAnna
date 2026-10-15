@@ -12,7 +12,7 @@
           <span class="service__num" aria-hidden="true"><%= String(i + 1).padStart(2, '0') %></span>
         </div>
 <% if (t(it.title)) { -%>
-        <h3 class="service__title"><%= t(it.title) %></h3>
+        <h3 class="service__title"><%= kit.typo(t(it.title)) %></h3>
 <% } -%>
 <% paras(it.text).forEach((p) => { -%>
         <p class="service__text"><%= p %></p>

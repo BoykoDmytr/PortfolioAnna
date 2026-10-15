@@ -51,7 +51,8 @@ test('JSON: валідна заявка → 201 і зберігається', ()
   assert.equal(lead.name, 'Олена');
   assert.equal(lead.message, 'Хочемо спокійний відпочинок\n\nбез пересадок');
   assert.equal(lead.website, undefined, 'honeypot не зберігається');
-  assert.deepEqual(Object.keys(lead).sort(), ['contact', 'createdAt', 'dates', 'destination', 'id', 'lang', 'message', 'name', 'status', 'travelers']);
+  assert.deepEqual(Object.keys(lead).sort(), ['contact', 'createdAt', 'dates', 'destination', 'id', 'lang', 'message', 'name', 'note', 'status', 'travelers']);
+  assert.equal(lead.note, '', 'нотатка власниці — порожня');
 }));
 
 test('urlencoded (без JS): 303 на сторінку з ?lead=ok|error#contact', () => withServer(async (ctx, client) => {
@@ -94,11 +95,19 @@ test('валідація → 400 з details (мова повідомлень —
   assert.equal(typeof res.data.error, 'string');
   const fields = res.data.details.map((d) => d.field).sort();
   assert.deepEqual(fields, ['contact', 'message', 'name']);
-  assert.match(res.data.details.find((d) => d.field === 'name').message, /символ/);
+  assert.equal(res.data.details.find((d) => d.field === 'name').message, 'Ім’я закоротке — щонайменше 2 символи.');
+  assert.equal(res.data.details.find((d) => d.field === 'message').message, 'Задовгий текст — не більше 1000 символів.');
 
   const en = await client.post('/api/lead', { json: { lang: 'en' }, csrf: false });
   assert.equal(en.status, 400);
   assert.match(en.data.error, /Please/);
+
+  const enShort = await client.post('/api/lead', { json: { lang: 'en', name: 'A', contact: '12' }, csrf: false });
+  assert.equal(enShort.status, 400);
+  assert.equal(enShort.data.details.find((d) => d.field === 'name').message, 'Name is too short — at least 2 characters.');
+  assert.equal(enShort.data.details.find((d) => d.field === 'contact').message, 'Please enter a full phone number or Telegram username.');
+  const ukShort = await client.post('/api/lead', { json: { name: 'Олена', contact: '12' }, csrf: false });
+  assert.match(ukShort.data.details.find((d) => d.field === 'contact').message, /^Вкажіть повний номер телефону або нік у Telegram \(щонайменше 3 символи\)\.$/);
 
   const wrongType = await client.post('/api/lead', { json: { ...VALID, name: { $gt: '' } }, csrf: false });
   assert.equal(wrongType.status, 400);
@@ -148,10 +157,44 @@ test('адмінка: список, зміна статусу, видаленн�
   assert.equal((await admin.patch('/admin/api/leads/unknown-id', { json: { status: 'done' } })).status, 404);
   assert.equal((await admin.patch(`/admin/api/leads/${id}`, { json: { status: 'done' }, csrf: false })).status, 403);
 
+  // Нотатка для себе: зберігається, обрізається, перевіряється довжина; статус не змінює
+  const noted = await admin.patch(`/admin/api/leads/${id}`, { json: { note: '  Передзвонити в п’ятницю\r\n\n\n\nбюджет до 2000 €  ' } });
+  assert.equal(noted.status, 200, noted.text);
+  assert.equal(noted.data.note, 'Передзвонити в п’ятницю\n\nбюджет до 2000 €');
+  assert.equal(noted.data.status, 'in_progress');
+  assert.equal(readJson(leadsFile(ctx)).find((l) => l.id === id).note, noted.data.note);
+  const tooLongNote = await admin.patch(`/admin/api/leads/${id}`, { json: { note: 'x'.repeat(1001) } });
+  assert.equal(tooLongNote.status, 400);
+  assert.equal(tooLongNote.data.details[0].field, 'note');
+  assert.equal((await admin.patch(`/admin/api/leads/${id}`, { json: { note: 5 } })).status, 400);
+  assert.equal((await admin.patch(`/admin/api/leads/${id}`, { json: {} })).status, 400);
+  const both = await admin.patch(`/admin/api/leads/${id}`, { json: { status: 'done', note: null } });
+  assert.deepEqual([both.data.status, both.data.note], ['done', '']);
+  const statusError = (await admin.patch(`/admin/api/leads/${id}`, { json: { status: 'nope' } })).data;
+  assert.match(statusError.details[0].message, /У роботі/);
+  assert.ok((await admin.get('/admin/api/leads')).data.every((l) => typeof l.note === 'string'));
+
   assert.deepEqual((await admin.del(`/admin/api/leads/${id}`)).data, { ok: true });
   assert.equal((await admin.del(`/admin/api/leads/${id}`)).status, 404);
   assert.deepEqual((await admin.get('/admin/api/leads')).data.map((l) => l.name), ['Друга']);
 }));
+
+test('заявки зі старої версії (без нотатки) отримують порожню нотатку', async () => {
+  const ctx = await startServer();
+  try {
+    const file = leadsFile(ctx);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify([{ id: 'old-lead-1', createdAt: new Date().toISOString(), name: 'Олег', contact: '@oleh', status: 'new' }]));
+    const { LeadStore } = require('../src/leads');
+    const store = new LeadStore({ leadsFile: file, logger: { error() {}, warn() {} } });
+    assert.equal(store.list()[0].note, '');
+    const updated = await store.update('old-lead-1', { note: 'Перша поїздка' });
+    assert.equal(updated.note, 'Перша поїздка');
+    assert.equal(updated.status, 'new');
+  } finally {
+    await ctx.close();
+  }
+});
 
 test('validateLead: обрізає пробіли й керівні символи', () => {
   const { lead, errors } = validateLead({ name: '  Анна\u0000  ', contact: ' @anna ', travelers: 2 });

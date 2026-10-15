@@ -20,6 +20,12 @@
   root.classList.remove('no-js');
   root.classList.add('js');
 
+  // Прибираємо «?lead=…» з адреси після відправки без JS — інакше перезавантаження чи поширене
+  // посилання знову показуватимуть «Дякую» замість форми.
+  if (/[?&]lead=/.test(window.location.search) && window.history.replaceState) {
+    window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+  }
+
   /* ---------- 1. Reveal on scroll ---------- */
   (function initReveal() {
     var pending = revealEls.filter(function (el) { return !el.classList.contains('is-visible'); });
@@ -37,6 +43,13 @@
       });
     }, { rootMargin: '0px 0px -8% 0px', threshold: 0 }); // 0: також слайди каруселі, що лише «визирають» збоку
     pending.forEach(function (el) { io.observe(el); });
+    doc.addEventListener('focusin', function (e) {
+      var block = e.target.closest && e.target.closest('[data-reveal]');
+      if (block && !block.classList.contains('is-visible')) {
+        block.classList.add('is-visible');
+        io.unobserve(block);
+      }
+    });
   })();
 
   /* ---------- 2. Header state + active nav link ---------- */
@@ -106,6 +119,14 @@
     if (!toggle || !menu || !header) return;
     var isOpen = false;
     var closeTimer = null;
+    // Поки меню відкрите, решта сторінки недоступна (як у модальному вікні)
+    var behind = [doc.getElementById('main'), $('.site-footer'), $('[data-fab]')].filter(Boolean);
+    function setBehindInert(on) {
+      behind.forEach(function (el) {
+        if (on) el.setAttribute('inert', '');
+        else el.removeAttribute('inert');
+      });
+    }
 
     function setLabel(open) {
       var label = toggle.getAttribute(open ? 'data-label-close' : 'data-label-open');
@@ -123,6 +144,7 @@
       toggle.setAttribute('aria-expanded', 'true');
       setLabel(true);
       lockScroll();
+      setBehindInert(true);
       doc.addEventListener('keydown', onKey);
     }
     function close(returnFocus) {
@@ -133,6 +155,7 @@
       toggle.setAttribute('aria-expanded', 'false');
       setLabel(false);
       unlockScroll();
+      setBehindInert(false);
       doc.removeEventListener('keydown', onKey);
       closeTimer = setTimeout(function () { menu.hidden = true; }, prefersReduced() ? 0 : 400);
       if (returnFocus) toggle.focus();
@@ -163,18 +186,32 @@
     });
     menu.addEventListener('click', function (e) {
       var link = e.target.closest('a');
-      if (link) close(false);
+      if (!link) return;
+      close(false);
+      // Пункт меню веде до секції — переносимо туди фокус, щоб він не «губився» на <body>
+      var hash = link.getAttribute('href') || '';
+      var target = hash.charAt(0) === '#' && hash.length > 1 ? doc.getElementById(hash.slice(1)) : null;
+      if (target) {
+        if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1');
+        target.focus({ preventScroll: true });
+      }
     });
-    var wide = window.matchMedia('(min-width: 1180px)');
+    var NAV_WIDE = 1280; // те саме значення, що й у site.css (повне меню в шапці)
+    var wide = window.matchMedia('(min-width: ' + NAV_WIDE + 'px)');
 
     // Fall back to the burger when the nav does not fit (long labels / many sections)
     var inner = $('.site-header__inner', header);
     var nav = $('.site-nav', header);
+    var brandWord = $('.brand__word', header);
     function fitNav() {
       if (!inner || !nav) return;
       root.classList.remove('nav-compact');
       if (!wide.matches) return;
-      if (inner.scrollWidth > inner.clientWidth + 1) root.classList.add('nav-compact');
+      // не вміщається рядок шапки або назва бренду стискається через меню → лишаємо «бургер»
+      var squeezed = brandWord && $$('.brand__name, .brand__tagline', brandWord).some(function (el) {
+        return el.scrollWidth > el.clientWidth + 1;
+      });
+      if (inner.scrollWidth > inner.clientWidth + 1 || squeezed) root.classList.add('nav-compact');
     }
     function onLayoutChange() {
       fitNav();
@@ -214,13 +251,20 @@
     function maxScroll() {
       return track.scrollWidth - track.clientWidth;
     }
+    // aria-disabled замість disabled: вимкнена кнопка втратила б фокус (він падав на <body>)
+    function setDisabled(btn, off) {
+      btn.setAttribute('aria-disabled', String(off));
+    }
+    function isDisabled(btn) {
+      return btn.getAttribute('aria-disabled') === 'true';
+    }
     function update() {
       var max = maxScroll();
-      prev.disabled = track.scrollLeft <= 2;
-      next.disabled = track.scrollLeft >= max - 2;
+      setDisabled(prev, track.scrollLeft <= 2);
+      setDisabled(next, track.scrollLeft >= max - 2);
       if (count) {
         var visible = Math.max(1, Math.round(track.clientWidth / step()));
-        var idx = next.disabled ? slides.length - visible : currentIndex();
+        var idx = isDisabled(next) ? slides.length - visible : currentIndex();
         var pad = function (n) { return (n < 10 ? '0' : '') + n; };
         count.textContent = pad(Math.min(slides.length, idx + 1)) + ' / ' + pad(slides.length);
       }
@@ -231,8 +275,8 @@
       var target = (currentIndex() + dir) * step();
       track.scrollTo({ left: target, behavior: prefersReduced() ? 'auto' : 'smooth' });
     }
-    prev.addEventListener('click', function () { go(-1); });
-    next.addEventListener('click', function () { go(1); });
+    prev.addEventListener('click', function () { if (!isDisabled(prev)) go(-1); });
+    next.addEventListener('click', function () { if (!isDisabled(next)) go(1); });
     track.addEventListener('keydown', function (e) {
       if (e.key === 'ArrowRight') { e.preventDefault(); go(1); }
       if (e.key === 'ArrowLeft') { e.preventDefault(); go(-1); }
@@ -413,15 +457,18 @@
     });
     list.addEventListener('click', function () { setOpen(false); });
 
-    // Show after the hero; hide while the contact section is on screen
+    // Показуємо після головного екрана; ховаємо, щойно на екрані контакти або підвал
+    // (там ті самі месенджери, а кнопка лише закривала б кнопку «Нагору» й текст).
+    // Прихована кнопка — inert: її не можна «знайти» клавішею Tab.
     var hero = doc.getElementById('hero');
-    var contact = doc.getElementById('contact');
     var pastHero = !hero;
-    var contactVisible = false;
+    var covered = 0; // скільки «заборонених» зон зараз на екрані
     var sync = function () {
-      var visible = pastHero && !contactVisible;
+      var visible = pastHero && covered === 0;
       fab.classList.toggle('is-visible', visible);
       if (!visible && isOpen) setOpen(false);
+      if (visible || isOpen) fab.removeAttribute('inert');
+      else fab.setAttribute('inert', '');
     };
     if (!('IntersectionObserver' in window)) {
       fab.classList.add('is-visible');
@@ -433,11 +480,16 @@
         sync();
       }, { threshold: 0.35 }).observe(hero);
     }
-    if (contact) {
-      new IntersectionObserver(function (entries) {
-        contactVisible = entries[0].isIntersecting;
+    var zones = [doc.getElementById('contact'), $('.site-footer')].filter(Boolean);
+    if (zones.length) {
+      var seen = new Map();
+      var zoneIo = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) { seen.set(entry.target, entry.isIntersecting); });
+        covered = 0;
+        seen.forEach(function (v) { if (v) covered += 1; });
         sync();
-      }, { threshold: 0.2 }).observe(contact);
+      }, { threshold: 0 });
+      zones.forEach(function (z) { zoneIo.observe(z); });
     }
     sync();
   })();
@@ -479,20 +531,48 @@
       sending: form.getAttribute('data-msg-sending') || '…',
       success: form.getAttribute('data-msg-success') || '',
       error: form.getAttribute('data-msg-error') || '',
+      fields: form.getAttribute('data-msg-fields') || '',
     };
     var busy = false;
 
-    // Clean "?lead=…" from the address bar after a no-JS round trip
-    if (/[?&]lead=/.test(window.location.search) && window.history.replaceState) {
-      window.history.replaceState(null, '', window.location.pathname + window.location.hash);
-    }
+    // Власні підказки під полями замість системних «бульбашок» (вони мовою браузера, а не сторінки).
+    // Без JS лишається звичайна перевірка браузера.
+    form.noValidate = true;
 
     function setStatus(text, isError) {
       status.textContent = text;
       status.classList.toggle('is-error', !!isError);
     }
+    function errorBox(field) {
+      var id = field.id + '-error';
+      var box = doc.getElementById(id);
+      if (!box) {
+        box = doc.createElement('p');
+        box.className = 'field__error';
+        box.id = id;
+        box.hidden = true;
+        field.insertAdjacentElement('afterend', box);
+      }
+      return box;
+    }
+    function setFieldError(field, text) {
+      var box = errorBox(field);
+      box.textContent = text;
+      box.hidden = false;
+      field.setAttribute('aria-invalid', 'true');
+      field.setAttribute('aria-describedby', box.id);
+    }
+    function clearFieldError(field) {
+      field.removeAttribute('aria-invalid');
+      field.removeAttribute('aria-describedby');
+      var box = doc.getElementById(field.id + '-error');
+      if (box) {
+        box.hidden = true;
+        box.textContent = '';
+      }
+    }
     function clearInvalid() {
-      $$('[aria-invalid]', form).forEach(function (el) { el.removeAttribute('aria-invalid'); });
+      $$('[aria-invalid]', form).forEach(clearFieldError);
     }
     function setBusy(on) {
       busy = on;
@@ -500,8 +580,21 @@
       submit.setAttribute('aria-busy', String(on));
       if (submitLabel) submitLabel.textContent = on ? msg.sending : labelIdle;
     }
+    /** Перевірка обов’язкових полів (ті самі межі, що й на сервері) → масив полів з помилкою */
+    function validate() {
+      var bad = [];
+      $$('input[required], textarea[required]', form).forEach(function (field) {
+        var value = field.value.trim();
+        var min = Number(field.getAttribute('minlength')) || 1;
+        if (value.length < min) {
+          setFieldError(field, field.getAttribute('data-msg-invalid') || msg.fields);
+          bad.push(field);
+        }
+      });
+      return bad;
+    }
     form.addEventListener('input', function (e) {
-      if (e.target.getAttribute('aria-invalid')) e.target.removeAttribute('aria-invalid');
+      if (e.target.getAttribute('aria-invalid')) clearFieldError(e.target);
     });
 
     form.addEventListener('submit', function (e) {
@@ -509,6 +602,12 @@
       e.preventDefault();
       if (busy) return;
       clearInvalid();
+      var invalid = validate();
+      if (invalid.length) {
+        setStatus(msg.fields, true);
+        invalid[0].focus();
+        return;
+      }
       var data = {};
       new FormData(form).forEach(function (value, key) { data[key] = typeof value === 'string' ? value.trim() : ''; });
       setBusy(true);
@@ -545,21 +644,21 @@
           }
           return;
         }
+        // Сервер відповідає мовою форми (поле lang): повідомлення — під відповідними полями
         var details = Array.isArray(r.body.details) ? r.body.details : [];
         var firstBad = null;
+        var unplaced = [];
         details.forEach(function (d) {
           var field = d && d.field && form.elements.namedItem(d.field);
-          if (field && field.setAttribute) {
-            field.setAttribute('aria-invalid', 'true');
+          if (field && field.id && field.setAttribute) {
+            setFieldError(field, d.message || field.getAttribute('data-msg-invalid') || msg.fields);
             if (!firstBad) firstBad = field;
+          } else if (d && d.message) {
+            unplaced.push(d.message);
           }
         });
-        // Server messages are Ukrainian; on other languages use the localized UI string
-        var serverText = root.lang === 'uk' ? (r.body.error || '') : '';
-        if (root.lang === 'uk' && details.length) {
-          serverText = details.map(function (d) { return d && d.message; }).filter(Boolean).join(' ') || serverText;
-        }
-        setStatus(r.status === 429 || details.length ? (serverText || msg.error) : msg.error, true);
+        var serverText = [r.body.error].concat(unplaced).filter(Boolean).join(' ');
+        setStatus(serverText || msg.error, true);
         if (firstBad) firstBad.focus();
       }).catch(function () {
         setBusy(false);

@@ -8,9 +8,13 @@
  *   DATA_DIR        — папка з даними (./data): content.json, uploads/, private/
  *   ADMIN_PASSWORD  — початковий пароль адмінки (лише під час першого запуску; інакше 'anna2026')
  *   BASE_PATH       — префікс шляхів для статичного експорту (наприклад /PortfolioAnna для GitHub Pages)
+ *   TRUST_PROXY     — сервер працює за реверс-проксі (Caddy, Nginx): 'loopback', кількість проксі або їхні IP.
+ *                     Тоді IP відвідувача, HTTPS і домен беруться із заголовків X-Forwarded-*.
+ *   ALLOWED_HOSTS   — додаткові домени, з яких відкривається адмінка (через кому; '.example.com' — з піддоменами)
  */
 
 const path = require('path');
+const { parseTrustProxy, parseHostList } = require('./net');
 
 const ROOT_DIR = path.resolve(__dirname, '..');
 const DEFAULT_PORT = 3000;
@@ -73,6 +77,8 @@ function loadConfig(env = process.env) {
     basePath: normalizeBasePath(env.BASE_PATH),
     telegramApiBase: env.TELEGRAM_API_BASE || 'https://api.telegram.org',
     production: env.NODE_ENV === 'production',
+    trustProxy: parseTrustProxy(env.TRUST_PROXY),
+    allowedHosts: parseHostList(env.ALLOWED_HOSTS),
   };
 }
 

@@ -37,6 +37,7 @@ test('npm run export → статичні файли в OUT_DIR з BASE_PATH', (
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(result.stdout, /Готово/);
   assert.ok(result.stdout.includes(outDir));
+  assert.match(result.stdout, /не вказано «Адресу сайту»/, 'нагадування: без адреси сайту прев’ю в месенджерах без картинки');
 
   const uk = fs.readFileSync(path.join(outDir, 'index.html'), 'utf8');
   const en = fs.readFileSync(path.join(outDir, 'en', 'index.html'), 'utf8');

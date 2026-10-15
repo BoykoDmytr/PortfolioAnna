@@ -7,7 +7,8 @@
 
 const os = require('os');
 const { createApp } = require('./src/app');
-const { loadConfig, DEFAULT_ADMIN_PASSWORD } = require('./src/config');
+const { loadConfig } = require('./src/config');
+const { isLoopbackAddress } = require('./src/net');
 
 const config = loadConfig();
 
@@ -33,8 +34,10 @@ function lanAddresses() {
 function printBanner(port) {
   const { auth, paths } = app.services;
   const wildcard = config.host === '0.0.0.0' || config.host === '::';
+  const loopbackOnly = !wildcard && (config.host === 'localhost' || isLoopbackAddress(config.host));
   const shownHost = wildcard || config.host === '127.0.0.1' || config.host === '::1' ? 'localhost' : config.host;
   const base = `http://${shownHost.includes(':') ? `[${shownHost}]` : shownHost}:${port}`;
+  const localAdmin = `http://localhost:${port}/admin/`;
 
   const lines = [
     '',
@@ -46,15 +49,44 @@ function printBanner(port) {
     '',
   ];
 
-  if (auth.mustChangePassword) {
-    if (auth.verifyPasswordSync(DEFAULT_ADMIN_PASSWORD)) {
-      lines.push(`  Пароль для входу:     ${DEFAULT_ADMIN_PASSWORD}`);
-    } else if (config.adminPasswordFromEnv && auth.verifyPasswordSync(config.adminPassword)) {
+  if (auth.usingPublicDefault) {
+    if (config.production) {
+      lines.push(
+        '  !!! УВАГА: пароль адмінки досі стандартний (з інструкції), а сервер запущено в робочому',
+        '  !!! режимі (NODE_ENV=production) — тому вхід з ним вимкнено для всіх. Зупиніть сервер,',
+        '  !!! видаліть data/private/auth.json і запустіть з власним паролем: ADMIN_PASSWORD="…" npm start',
+        '',
+      );
+    } else {
+      lines.push(
+        '  Пароль для входу:     anna2026 (стандартний — діє лише на цьому комп’ютері)',
+        `  Змініть його одразу:  ${localAdmin} → розділ «Безпека».`,
+        '',
+      );
+      if (!loopbackOnly) {
+        lines.push(
+          '  !!! УВАГА: сайт відкрито для інших пристроїв у мережі, а пароль адмінки ще стандартний.',
+          '  !!! З телефона чи іншого комп’ютера увійти з ним не вийде (щоб ніхто сторонній не зайшов),',
+          `  !!! тож спершу змініть пароль тут: ${localAdmin}`,
+          '',
+        );
+      }
+    }
+  } else if (auth.mustChangePassword) {
+    if (config.adminPasswordFromEnv && auth.verifyPasswordSync(config.adminPassword)) {
       lines.push('  Пароль для входу:     той, що задано в ADMIN_PASSWORD');
     } else {
       lines.push('  Пароль для входу:     початковий пароль, заданий під час першого запуску');
     }
     lines.push('  Після входу змініть його в адмінці: розділ «Безпека».', '');
+  }
+
+  if (config.production && !config.trustProxy) {
+    lines.push(
+      '  Підказка: якщо сервер працює за Caddy/Nginx (HTTPS), задайте TRUST_PROXY=loopback —',
+      '  інакше вхід не позначається як захищений, а ліміти спроб діють спільно для всіх відвідувачів.',
+      '',
+    );
   }
 
   if (wildcard) {

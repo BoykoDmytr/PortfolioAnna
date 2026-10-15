@@ -4,8 +4,8 @@ const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { startServer, createClient, readJson, TEST_PASSWORD } = require('./helpers');
-const { Auth, parseCookies, createRateLimiter } = require('../src/auth');
+const { startServer, createClient, readJson, TEST_PASSWORD, FAST_SCRYPT } = require('./helpers');
+const { Auth, parseCookies, createRateLimiter, SCRYPT_PARAMS } = require('../src/auth');
 
 let ctx;
 
@@ -18,9 +18,11 @@ after(() => ctx.close());
 test('auth.json створюється під час першого запуску (scrypt, без пароля у відкритому вигляді)', () => {
   const file = path.join(ctx.dataDir, 'private', 'auth.json');
   const rec = readJson(file);
-  assert.deepEqual(Object.keys(rec).sort(), ['hash', 'mustChangePassword', 'salt', 'secret', 'sessionVersion']);
+  assert.deepEqual(Object.keys(rec).sort(), ['hash', 'mustChangePassword', 'publicDefault', 'revoked', 'salt', 'scrypt', 'secret', 'sessionVersion']);
   assert.equal(rec.mustChangePassword, true);
   assert.equal(rec.sessionVersion, 1);
+  assert.deepEqual(rec.scrypt, { ...FAST_SCRYPT }, 'параметри scrypt записано поруч із хешем');
+  assert.equal(rec.publicDefault, false, 'пароль з ADMIN_PASSWORD — не стандартний з інструкції');
   assert.ok(!fs.readFileSync(file, 'utf8').includes(TEST_PASSWORD));
 });
 
@@ -48,11 +50,11 @@ test('CSRF: POST без X-Admin-Request → 403', async () => {
   assert.equal(res.setCookies.length, 0);
 });
 
-test('вхід: невірний пароль → 401, правильний → cookie', async () => {
+test('вхід: неправильний пароль → 401 (і скільки спроб лишилось), правильний → cookie', async () => {
   const client = createClient(ctx.base);
   const wrong = await client.post('/admin/api/login', { json: { password: 'nope-nope' } });
   assert.equal(wrong.status, 401);
-  assert.deepEqual(wrong.data, { error: 'Невірний пароль' });
+  assert.deepEqual(wrong.data, { error: 'Неправильний пароль', attemptsLeft: 4 });
 
   const empty = await client.post('/admin/api/login', { json: {} });
   assert.equal(empty.status, 400);
@@ -109,7 +111,9 @@ test('rate limit: після 5 невдалих спроб → 429 (навіть
   try {
     const client = createClient(local.base);
     for (let i = 0; i < 5; i += 1) {
-      assert.equal((await client.post('/admin/api/login', { json: { password: `wrong-${i}` } })).status, 401);
+      const res = await client.post('/admin/api/login', { json: { password: `wrong-${i}` } });
+      assert.equal(res.status, 401);
+      assert.equal(res.data.attemptsLeft, 4 - i, 'адмінка попереджає до блокування');
     }
     const blocked = await client.post('/admin/api/login', { json: { password: TEST_PASSWORD } });
     assert.equal(blocked.status, 429);
@@ -143,8 +147,10 @@ test('зміна пароля: перевірки, нова cookie, інші с�
     await laptop.login();
 
     const wrongCurrent = await laptop.post('/admin/api/password', { json: { current: 'wrong', next: 'new-password-1' } });
-    assert.equal(wrongCurrent.status, 400, 'невірний поточний пароль — не 401, щоб адмінка не «вилогінювала»');
+    assert.equal(wrongCurrent.status, 400, 'неправильний поточний пароль — не 401, щоб адмінка не «вилогінювала»');
     assert.equal(wrongCurrent.data.details[0].field, 'current');
+    assert.equal(wrongCurrent.data.error, 'Поточний пароль неправильний');
+    assert.equal(wrongCurrent.data.attemptsLeft, 4);
 
     const short = await laptop.post('/admin/api/password', { json: { current: TEST_PASSWORD, next: 'short' } });
     assert.equal(short.status, 400);
@@ -171,6 +177,17 @@ test('зміна пароля: перевірки, нова cookie, інші с�
     const rec = readJson(path.join(local.dataDir, 'private', 'auth.json'));
     assert.equal(rec.sessionVersion, 2);
     assert.equal(rec.mustChangePassword, false);
+  } finally {
+    await local.close();
+  }
+});
+
+test('справжні параметри scrypt — за OWASP (N=2^14, r=8, p=5)', async () => {
+  assert.deepEqual({ ...SCRYPT_PARAMS }, { N: 16384, r: 8, p: 5 });
+  const local = await startServer({ scryptParams: null });
+  try {
+    assert.deepEqual(readJson(path.join(local.dataDir, 'private', 'auth.json')).scrypt, { N: 16384, r: 8, p: 5 });
+    await createClient(local.base).login();
   } finally {
     await local.close();
   }
@@ -203,4 +220,16 @@ test('parseCookies і rate limiter', () => {
   assert.equal(limiter.check('ip', 200).limited, true);
   assert.equal(limiter.check('ip', 1001).limited, false, 'старі події виходять з вікна');
   assert.equal(limiter.check('other', 200).limited, false);
+
+  // consume: перевірка й облік одним кроком; undo повертає спробу
+  const l2 = createRateLimiter({ windowMs: 1000, max: 2 });
+  const a = l2.consume('ip', 0);
+  assert.deepEqual([a.limited, a.remaining], [false, 1]);
+  const b = l2.consume('ip', 1);
+  assert.deepEqual([b.limited, b.remaining], [false, 0]);
+  assert.equal(l2.consume('ip', 2).limited, true);
+  b.undo();
+  b.undo(); // повторний undo нічого не ламає
+  assert.equal(l2.consume('ip', 3).limited, false);
+  assert.equal(l2.consume('ip', 4).limited, true);
 });

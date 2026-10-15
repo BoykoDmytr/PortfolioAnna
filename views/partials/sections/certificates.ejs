@@ -5,7 +5,7 @@
   <div class="container">
 <%- include('../section-head', { s, id: 'certificates', align: 'split' }) %>
     <ul class="certs certs--<%= items.length %>">
-<% items.forEach((it, i) => { const photo = img(it.image); const title = t(it.title); const meta = [t(it.issuer), it.year].filter(Boolean).join(' · '); -%>
+<% items.forEach((it, i) => { const photo = img(it.image); const title = t(it.title); const issuer = t(it.issuer); const meta = [issuer, it.year].filter(Boolean).join(' · '); -%>
       <li class="cert" data-reveal style="--d: <%= i % 4 %>">
 <% if (photo) { -%>
         <a class="cert__media" href="<%= photo %>" data-lightbox="certificates" data-caption="<%= [title, meta].filter(Boolean).join(' — ') %>" aria-label="<%= title ? kit.L.openPhoto + ': ' + title : kit.L.openPhoto %>">
@@ -16,10 +16,10 @@
 <% } -%>
         <div class="cert__body">
 <% if (title) { -%>
-          <h3 class="cert__title"><%= title %></h3>
+          <h3 class="cert__title"><%= kit.typo(title) %></h3>
 <% } -%>
 <% if (meta) { -%>
-          <p class="cert__meta"><%= meta %></p>
+          <p class="cert__meta"><% if (issuer) { %><%= kit.typo(issuer) %><% } %><% if (issuer && it.year) { %> <% } %><% if (it.year) { %><span class="cert__year"><% if (issuer) { %>· <% } %><%= it.year %></span><% } %></p>
 <% } -%>
         </div>
       </li>

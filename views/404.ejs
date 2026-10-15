@@ -7,11 +7,14 @@
   const langList = Array.isArray(locals.langs) ? locals.langs : [];
   const homeHref = ((langList.find((l) => l.active) || langList[0]) || { href: en ? '/en/' : '/' }).href;
   const preset = locals.themePreset || 'sand';
-  const style = locals.themeStyle || '';
+  let style = locals.themeStyle || '';
+  if (style && locals.theme) {
+    try { style += include('partials/theme-vars').trim(); } catch (e) { /* лише базові кольори */ }
+  }
   const brandLine = [brandInfo.name, brandInfo.tagline].filter(Boolean).join(' ');
   const copy = en
-    ? { title: 'Page not found', text: 'It seems this route is not on our map. Let’s head back to the start of the journey.', back: 'Back to home', eyebrow: 'Error 404' }
-    : { title: 'Сторінку не знайдено', text: 'Схоже, цього маршруту немає на нашій мапі. Повернімося на початок подорожі.', back: 'На головну', eyebrow: 'Помилка 404' };
+    ? { title: 'Page not found', text: 'Looks like this route isn’t on the map. Let’s head back to where the journey begins.', back: 'Back to home', eyebrow: 'Error 404' }
+    : { title: 'Сторінку не знайдено', text: 'Схоже, цього маршруту немає на мапі. Повернімося на початок подорожі.', back: 'На головну', eyebrow: 'Помилка 404' };
   let monogram = '';
   try { monogram = include('partials/monogram', { cls: 'notfound__mark' }); } catch (e) { monogram = ''; }
 -%>
@@ -30,7 +33,7 @@
 <body>
   <main class="notfound" id="main">
     <div class="notfound__inner">
-      <a class="notfound__brand" href="<%= homeHref %>" aria-label="<%= brandLine %>">
+      <a class="notfound__brand" href="<%= homeHref %>" aria-label="<%= brandLine.toLowerCase().replace(/(^|\s)(\S)/g, (m, sp, ch) => sp + ch.toUpperCase()) %> — <%= en ? 'home page' : 'головна сторінка' %>">
         <%- monogram %>
         <span class="footer-brand__word" aria-hidden="true">
           <span class="footer-brand__name"><%= brandInfo.name %></span>
@@ -40,8 +43,8 @@
         </span>
       </a>
       <p class="eyebrow notfound__eyebrow"><%- include('partials/wave', { waveCls: 'eyebrow__wave' }) %><span><%= copy.eyebrow %></span></p>
-      <h1 class="notfound__title">4<em>0</em>4</h1>
-      <p class="notfound__subtitle"><%= copy.title %></p>
+      <p class="notfound__code" aria-hidden="true">4<em>0</em>4</p>
+      <h1 class="notfound__title"><%= copy.title %></h1>
       <p class="notfound__text"><%= copy.text %></p>
       <a class="btn btn--primary" href="<%= homeHref %>"><%= copy.back %></a>
     </div>

@@ -5,7 +5,7 @@
 import { h, formatBytes, formatDate } from '../dom.js';
 import { icon } from '../icons.js';
 import { api, saveBlob } from '../api.js';
-import { state, setContent, emit, forgetStoredDraft } from '../state.js';
+import { state, setContent, emit, forgetStoredDraft, unitLabel } from '../state.js';
 import { pageHeader, card, toast, button, setBusy, confirmDialog, emptyState, loadingBlock } from '../ui.js';
 
 const DIRTY_WARNING = 'Ваші незбережені зміни буде втрачено.';
@@ -76,7 +76,7 @@ export function renderBackupsPage(view) {
   async function restore(item, btn) {
     const ok = await confirmDialog({
       title: 'Відновити цю версію?',
-      message: `Сайт повернеться до стану на ${formatDate(item.createdAt)}. Поточна версія теж збережеться в копіях, тож це можна буде скасувати.`,
+      message: `Сайт повернеться до стану на ${formatDate(item.createdAt, { afterVowel: true })}. Поточна версія теж збережеться в копіях, тож це можна буде скасувати.`,
       details: state.dirty ? [DIRTY_WARNING] : [],
       confirmLabel: 'Відновити',
     });
@@ -112,15 +112,27 @@ export function renderBackupsPage(view) {
         listEl.replaceChildren(emptyState({ iconName: 'history', title: 'Копій поки немає', text: 'Перша копія з’явиться автоматично, щойно ви збережете зміни.' }));
         return;
       }
+      // Кілька копій за одну хвилину розрізняємо секундами
+      const minuteOf = (item) => formatDate(item.createdAt);
+      const perMinute = new Map();
+      for (const item of items) perMinute.set(minuteOf(item), (perMinute.get(minuteOf(item)) || 0) + 1);
       listEl.replaceChildren(h('ul', { class: 'backup-list' }, items.map((item, i) => {
+        const when = formatDate(item.createdAt, { seconds: perMinute.get(minuteOf(item)) > 1 });
         const restoreBtn = button({ label: 'Відновити', iconName: 'undo', variant: 'secondary', size: 'sm' });
-        const downloadBtn = h('button', { type: 'button', class: 'icon-btn', 'aria-label': `Завантажити копію від ${formatDate(item.createdAt)}`, title: 'Завантажити файл' }, icon('download'));
+        restoreBtn.setAttribute('aria-label', `Відновити версію: ${when}`);
+        const downloadBtn = h('button', { type: 'button', class: 'icon-btn', 'aria-label': `Завантажити копію: ${when}`, title: 'Завантажити файл' }, icon('download'));
         restoreBtn.addEventListener('click', () => restore(item, restoreBtn));
         downloadBtn.addEventListener('click', () => download(item, downloadBtn));
+        // Якщо сервер повідомляє, що саме змінило збереження після цієї копії, — показуємо (щоб знати, яку відновлювати)
+        const changes = Array.isArray(item.changes) ? item.changes.filter((c) => typeof c === 'string') : [];
+        const changesText = changes.length
+          ? `Після неї змінено: ${changes.slice(0, 4).map(unitLabel).join(', ')}${changes.length > 4 ? ` та ще ${changes.length - 4}` : ''}`
+          : '';
         return h('li', { class: 'backup' },
           h('span', { class: 'backup__icon' }, icon('history')),
           h('div', { class: 'backup__info' },
-            h('p', { class: 'backup__date', text: formatDate(item.createdAt) }),
+            h('p', { class: 'backup__date', text: when }),
+            changesText ? h('p', { class: 'backup__changes', text: changesText }) : null,
             h('p', { class: 'backup__meta', text: `${i === 0 ? 'Найновіша · ' : ''}${formatBytes(item.size)}` })),
           h('div', { class: 'backup__actions' }, restoreBtn, downloadBtn));
       })));
@@ -131,14 +143,14 @@ export function renderBackupsPage(view) {
 
   view.append(
     pageHeader({
-      eyebrow: 'Безпечність даних',
+      eyebrow: 'Збереження даних',
       title: 'Резервні копії',
       description: 'Перед кожним збереженням попередня версія сайту зберігається автоматично (останні 30). Якщо щось пішло не так — просто відновіть потрібну.',
     }),
     h('div', { class: 'grid-2 grid-2--cards' },
       card({
-        title: 'Копія на комп’ютер',
-        description: 'Файл з усіма текстами та налаштуваннями сайту. Фото у файл не входять — вони лишаються в медіатеці.',
+        title: 'Копія на ваш пристрій',
+        description: 'Файл з усіма текстами та налаштуваннями сайту. Фото й заявки у файл не входять: фото лишаються в медіатеці, заявки — у розділі «Заявки».',
         children: [h('div', { class: 'form-actions' }, exportBtn)],
       }),
       card({

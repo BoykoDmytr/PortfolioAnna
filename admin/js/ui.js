@@ -8,11 +8,19 @@ import { icon } from './icons.js';
 /* ---------------- сповіщення ---------------- */
 
 const TOAST_ICONS = { success: 'check', error: 'alert', info: 'info' };
+/** На вузькому екрані показуємо лише одне сповіщення — інакше вони закривають половину форми. */
+const NARROW_QUERY = '(max-width: 720px)';
+const keyed = new Map(); // key → close()
 
 /**
- * toast('Збережено', { type: 'success' | 'error' | 'info', action: { label, onClick }, timeout })
+ * toast('Збережено', { type: 'success' | 'error' | 'info', action: { label, onClick }, timeout, key })
+ *
+ * key — «тема» сповіщення ('save', 'upload', 'password'…): нове сповіщення з тим самим ключем
+ * замінює попереднє (наприклад, «Збережено» прибирає стару помилку збереження).
+ * Оголошення для екранних читачів робить контейнер #toasts (aria-live="polite"),
+ * тому окремі сповіщення не мають власної ролі (інакше — подвійне читання).
  */
-export function toast(message, { type = 'success', action = null, timeout } = {}) {
+export function toast(message, { type = 'success', action = null, timeout, key } = {}) {
   const host = document.getElementById('toasts');
   if (!host) return () => {};
   const ms = timeout !== undefined ? timeout : (type === 'error' ? 8000 : action ? 7000 : 3800);
@@ -20,12 +28,13 @@ export function toast(message, { type = 'success', action = null, timeout } = {}
 
   const close = () => {
     clearTimeout(timer);
-    if (!el.isConnected) return;
+    if (key && keyed.get(key) === close) keyed.delete(key);
+    if (!el.isConnected || el.classList.contains('is-leaving')) return;
     el.classList.add('is-leaving');
     setTimeout(() => el.remove(), 220);
   };
 
-  const el = h('div', { class: ['toast', `toast--${type}`], role: type === 'error' ? 'alert' : 'status' },
+  const el = h('div', { class: ['toast', `toast--${type}`], dataset: { key } },
     h('span', { class: 'toast__icon' }, icon(TOAST_ICONS[type] || 'info')),
     h('p', { class: 'toast__text', text: message }),
     action && h('button', {
@@ -40,8 +49,14 @@ export function toast(message, { type = 'success', action = null, timeout } = {}
     h('button', { type: 'button', class: 'toast__close', 'aria-label': 'Закрити повідомлення', onClick: close }, icon('close')),
   );
 
+  if (key) closeToast(key, { instant: true });
+  const narrow = typeof window.matchMedia === 'function' && window.matchMedia(NARROW_QUERY).matches;
+  // Сповіщення, що вже зникають, не рахуємо
+  for (const old of host.querySelectorAll('.toast.is-leaving')) old.remove();
   host.append(el);
-  while (host.children.length > 3) host.firstElementChild.remove();
+  if (key) keyed.set(key, close);
+  const limit = narrow ? 1 : 3;
+  while (host.children.length > limit) host.firstElementChild.remove();
   if (ms > 0) {
     const start = () => {
       clearTimeout(timer);
@@ -50,9 +65,24 @@ export function toast(message, { type = 'success', action = null, timeout } = {}
     el.addEventListener('mouseenter', () => clearTimeout(timer));
     el.addEventListener('mouseleave', start);
     el.addEventListener('focusin', () => clearTimeout(timer));
+    el.addEventListener('focusout', start);
     start();
   }
   return close;
+}
+
+/** Закриває сповіщення з ключем key (якщо воно ще показане). */
+export function closeToast(key, { instant = false } = {}) {
+  const host = document.getElementById('toasts');
+  if (!host || !key) return;
+  keyed.delete(key);
+  for (const old of host.querySelectorAll(`.toast[data-key="${CSS.escape(key)}"]`)) {
+    if (instant) old.remove();
+    else if (!old.classList.contains('is-leaving')) {
+      old.classList.add('is-leaving');
+      setTimeout(() => old.remove(), 220);
+    }
+  }
 }
 
 /* ---------------- модальні вікна ---------------- */
@@ -63,6 +93,7 @@ export function toast(message, { type = 'success', action = null, timeout } = {}
  */
 export function openModal({ title, description, size = 'md', className = '', initialFocus } = {}) {
   const titleId = `dlg-${Math.random().toString(36).slice(2, 8)}`;
+  const descId = description ? `${titleId}-desc` : undefined;
   const body = h('div', { class: 'modal__body' });
   const footer = h('div', { class: 'modal__footer' });
   const opener = document.activeElement;
@@ -73,12 +104,12 @@ export function openModal({ title, description, size = 'md', className = '', ini
   });
   let result;
 
-  const dialog = h('dialog', { class: ['modal', `modal--${size}`, className], 'aria-labelledby': titleId },
+  const dialog = h('dialog', { class: ['modal', `modal--${size}`, className], 'aria-labelledby': titleId, 'aria-describedby': descId },
     h('div', { class: 'modal__panel' },
       h('header', { class: 'modal__header' },
         h('div', { class: 'modal__titles' },
           h('h2', { class: 'modal__title', id: titleId, text: title || '' }),
-          description && h('p', { class: 'modal__desc', text: description }),
+          description && h('p', { class: 'modal__desc', id: descId, text: description }),
         ),
         h('button', { type: 'button', class: 'icon-btn modal__x', 'aria-label': 'Закрити', onClick: () => close(undefined) }, icon('close')),
       ),
@@ -128,13 +159,38 @@ export function confirmDialog({
   danger = false,
 } = {}) {
   const modal = openModal({ title, size: 'sm', className: 'modal--confirm' });
-  if (message) modal.body.append(h('p', { class: 'modal__message', text: message }));
+  if (message) {
+    const messageId = `${modal.dialog.getAttribute('aria-labelledby')}-msg`;
+    modal.body.append(h('p', { class: 'modal__message', id: messageId, text: message }));
+    modal.dialog.setAttribute('aria-describedby', messageId);
+  }
   if (details.length) modal.body.append(h('ul', { class: 'modal__list' }, details.map((d) => h('li', { text: d }))));
   const ok = h('button', { type: 'button', class: ['btn', danger ? 'btn--danger' : 'btn--primary'], text: confirmLabel, onClick: () => modal.close(true) });
   const cancel = h('button', { type: 'button', class: 'btn btn--ghost', text: cancelLabel, onClick: () => modal.close(false) });
   modal.footer.append(cancel, ok);
   requestAnimationFrame(() => (danger ? cancel : ok).focus({ preventScroll: true }));
   return modal.closed.then((v) => v === true);
+}
+
+/**
+ * Меню дій (на телефоні — панель знизу екрана).
+ * actions: [{ label, iconName, danger, disabled, hint }] → Promise<index | null>
+ */
+export function actionSheet({ title, description, actions }) {
+  const modal = openModal({ title, description, size: 'sm', className: 'modal--sheet' });
+  const list = h('div', { class: 'sheet', role: 'group', 'aria-label': title });
+  actions.forEach((a, i) => {
+    if (!a) return;
+    list.append(h('button', {
+      type: 'button',
+      class: ['sheet__btn', a.danger && 'sheet__btn--danger'],
+      disabled: a.disabled,
+      onClick: () => modal.close(i),
+    }, a.iconName && icon(a.iconName), h('span', { class: 'sheet__label', text: a.label }), a.hint && h('span', { class: 'sheet__hint', text: a.hint })));
+  });
+  modal.body.append(list);
+  modal.footer.append(h('button', { type: 'button', class: 'btn btn--ghost', text: 'Закрити', onClick: () => modal.close(null) }));
+  return modal.closed.then((v) => (typeof v === 'number' ? v : null));
 }
 
 /* ---------------- дрібні компоненти ---------------- */

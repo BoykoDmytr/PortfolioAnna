@@ -10,7 +10,7 @@
     },
     "showAgency": false,
     "agencyName": {
-      "uk": "Працюю у складі туристичної агенції «Назва агенції»",
+      "uk": "Працюю в команді туристичної агенції «Назва агенції»",
       "en": "Part of the team at “Agency Name” travel agency"
     }
   },
@@ -37,12 +37,12 @@
   },
   "seo": {
     "title": {
-      "uk": "Анна Фролова — тревел-експертка. Подорожі під ключ",
-      "en": "Anna Frolova — Travel Advisor. Tailor-Made Trips"
+      "uk": "Анна Фролова — тревел-експертка, Київ. Тури під ключ",
+      "en": "Anna Frolova — Kyiv Travel Advisor. Tailor-Made Trips"
     },
     "description": {
-      "uk": "Тури на Мальдіви, у Єгипет, Туреччину, Грецію, Італію, ОАЕ та Альпи. Особистий підбір, перевірені готелі й підтримка 24/7 у подорожі.",
-      "en": "Holidays in the Maldives, Egypt, Turkey, Greece, Italy, the UAE and the Alps. Personal planning, trusted hotels and 24/7 support while you travel."
+      "uk": "Тури на Мальдіви, у Єгипет, Туреччину, Грецію, Італію, ОАЕ та Альпи. Особистий підбір, перевірені готелі й підтримка під час подорожі.",
+      "en": "Holidays in the Maldives, Egypt, Turkey, Greece, Italy, the UAE and the Alps. Personal planning, trusted hotels and support throughout your trip."
     },
     "ogImage": "/uploads/og-image.jpg",
     "siteUrl": ""
@@ -69,12 +69,12 @@
       "en": "Approximate dates"
     },
     "formTravelers": {
-      "uk": "Скільки вас буде",
+      "uk": "Скільки вас буде?",
       "en": "Number of travellers"
     },
     "formMessage": {
       "uk": "Побажання: бюджет, готель, формат відпочинку",
-      "en": "Wishes: budget, hotel, holiday style"
+      "en": "Anything else? Budget, hotel, type of holiday"
     },
     "formSubmit": {
       "uk": "Надіслати заявку",
@@ -93,20 +93,20 @@
       "en": "Something went wrong. Please try again or message me on Telegram or Viber."
     },
     "formConsent": {
-      "uk": "Надсилаючи заявку, ви погоджуєтеся на обробку контактних даних — лише для того, щоб я могла з вами зв’язатися.",
+      "uk": "Надсилаючи заявку, ви погоджуєтеся на обробку ваших персональних даних — лише для того, щоб я могла з вами зв’язатися.",
       "en": "By sending this form, you agree that I may use your contact details solely to get back to you."
     },
     "writeTelegram": {
       "uk": "Написати в Telegram",
-      "en": "Message on Telegram"
+      "en": "Message me on Telegram"
     },
     "writeViber": {
       "uk": "Написати у Viber",
-      "en": "Message on Viber"
+      "en": "Message me on Viber"
     },
     "writeInstagram": {
       "uk": "Написати в Instagram",
-      "en": "Message on Instagram"
+      "en": "Message me on Instagram"
     },
     "call": {
       "uk": "Зателефонувати",
@@ -125,12 +125,12 @@
       "en": "Close"
     },
     "prev": {
-      "uk": "Назад",
-      "en": "Previous"
+      "uk": "Попередній відгук",
+      "en": "Previous review"
     },
     "next": {
-      "uk": "Далі",
-      "en": "Next"
+      "uk": "Наступний відгук",
+      "en": "Next review"
     },
     "backToTop": {
       "uk": "Нагору",
@@ -162,8 +162,8 @@
         "en": "Home"
       },
       "eyebrow": {
-        "uk": "Подорожі з Анною Фроловою",
-        "en": "Travel with Anna Frolova"
+        "uk": "Анна Фролова · тревел-експертка",
+        "en": "Anna Frolova · Travel Advisor"
       },
       "title": {
         "uk": "Подорожі, продумані *до дрібниць*",
@@ -200,10 +200,14 @@
         "en": "Hi, I’m *Anna*"
       },
       "text": {
-        "uk": "Понад вісім років я допомагаю людям відпочивати так, як вони мріють. Працюю в туристичній агенції, тож маю доступ до перевірених туроператорів, найкращих тарифів і тих деталей, яких не знайдеш у пошуковику.\n\nДля мене подорож починається не з бронювання, а з розмови. Я розпитую, як ви любите відпочивати, яким є ваш ідеальний ранок у відпустці і чого точно не хочеться. А потім збираю план, у якому все на своїх місцях.\n\nОсобисто перевіряю готелі, стежу за рейсами й лишаюся на зв’язку протягом усієї поїздки. Ваше завдання — насолоджуватися, моє — подбати про решту.",
+        "uk": "Понад вісім років я допомагаю людям відпочивати так, як вони мріють. Працюю в туристичній агенції, тож маю доступ до перевірених туроператорів, найкращих тарифів і тих деталей, яких не знайдеш у пошуковику.\n\nДля мене подорож починається не з бронювання, а з розмови. Я розпитую, як ви любите відпочивати, який у вас ідеальний ранок у відпустці й чого точно не хочеться. А потім збираю план, у якому все на своїх місцях.\n\nОсобисто перевіряю готелі, стежу за рейсами й лишаюся на зв’язку протягом усієї поїздки. Ваше завдання — насолоджуватися, моє — подбати про решту.",
         "en": "For more than eight years I’ve been helping people travel the way they dream of. I work with a travel agency, which gives me access to trusted tour operators, the best rates and the kind of details you won’t find online.\n\nFor me, a trip doesn’t start with a booking — it starts with a conversation. I ask how you like to unwind, what your perfect holiday morning looks like and what you’d rather avoid. Then I put together a plan where everything falls into place.\n\nI check hotels personally, keep an eye on your flights and stay in touch for the whole trip. Your job is to enjoy it; mine is to take care of the rest."
       },
       "photo": "/uploads/about-sun-hat-cove.webp",
+      "photoAlt": {
+        "uk": "Анна Фролова, тревел-експертка",
+        "en": "Anna Frolova, travel advisor"
+      },
       "signature": "Anna Frolova",
       "stats": [
         {
@@ -218,7 +222,7 @@
           "id": "stat-countries",
           "value": "40+",
           "label": {
-            "uk": "країн у моїй географії",
+            "uk": "країн на моїй мапі",
             "en": "countries on my map"
           }
         },
@@ -232,10 +236,10 @@
         },
         {
           "id": "stat-support",
-          "value": "24/7",
+          "value": "SOS",
           "label": {
-            "uk": "на зв’язку в подорожі",
-            "en": "support while you travel"
+            "uk": "на зв’язку в екстрених ситуаціях",
+            "en": "on call for emergencies"
           }
         }
       ]
@@ -257,7 +261,7 @@
       },
       "subtitle": {
         "uk": "Беру на себе все, що забирає час і нерви. Вам лишаються тільки приємні клопоти: валіза, купальник і гарний настрій.",
-        "en": "I handle everything that eats up your time and energy. All that’s left for you is the fun part: packing, swimwear and a good mood."
+        "en": "I handle everything that eats up your time and energy. All that’s left for you is the fun part: packing your swimsuit and bringing your good mood."
       },
       "items": [
         {
@@ -268,7 +272,7 @@
             "en": "Beach holidays"
           },
           "text": {
-            "uk": "Мальдіви, Єгипет, Туреччина, Таїланд — підберу готель під ваш формат: тихий для двох, драйвовий для компанії чи з анімацією для дітей.",
+            "uk": "Мальдіви, Єгипет, Туреччина, Таїланд — підберу готель під ваш формат: тихий для двох, жвавий для компанії друзів чи з анімацією для дітей.",
             "en": "The Maldives, Egypt, Turkey, Thailand — I’ll find a hotel that fits your style: quiet for two, lively for friends or perfect for the kids."
           }
         },
@@ -280,7 +284,7 @@
             "en": "Tailor-made itineraries"
           },
           "text": {
-            "uk": "Італія, Греція, Іспанія — продумую маршрут по днях, бронюю готелі, трансфери й екскурсії, щоб ви побачили головне без поспіху.",
+            "uk": "Італія, Греція, Іспанія — розписую маршрут день за днем, бронюю готелі, трансфери й екскурсії, щоб ви побачили головне без поспіху.",
             "en": "Italy, Greece, Spain — I plan your route day by day and book hotels, transfers and tours, so you see the best without rushing."
           }
         },
@@ -305,7 +309,7 @@
           },
           "text": {
             "uk": "Зручні перельоти, сімейні номери, пологий вхід у море й хороший дитячий клуб. Враховую вік дітей і всі ваші побажання.",
-            "en": "Easy flights, family rooms, a gentle sea and a good kids’ club. I take your children’s ages and every wish into account."
+            "en": "Easy flights, family rooms, a gently sloping beach and a good kids’ club. I take your children’s ages and every wish into account."
           }
         },
         {
@@ -328,8 +332,8 @@
             "en": "Visas, insurance & support"
           },
           "text": {
-            "uk": "Допомагаю з візами й документами, оформлюю страховку та лишаюся на зв’язку 24/7, поки ви подорожуєте.",
-            "en": "I help with visas and paperwork, arrange travel insurance and stay in touch 24/7 while you’re away."
+            "uk": "Допомагаю з візами й документами, оформлюю страховку й лишаюся на зв’язку під час подорожі — у термінових випадках навіть поза робочими годинами.",
+            "en": "I help with visas and paperwork, arrange travel insurance and stay reachable while you’re away — even out of hours if it’s urgent."
           }
         }
       ]
@@ -350,8 +354,8 @@
         "en": "Destinations I know *inside out*"
       },
       "subtitle": {
-        "uk": "Ціни орієнтовні — за тиждень на одну людину з перельотом. Точну вартість розрахую під ваші дати й побажання.",
-        "en": "Prices are a rough guide — per person for a week, flights included. I’ll work out the exact cost for your dates and wishes."
+        "uk": "Ціни орієнтовні — за тиждень на одну людину з перельотом; оплата в гривні за курсом туроператора. Точну вартість розрахую під ваші дати й побажання.",
+        "en": "Prices are a rough guide — per person for a week, flights included, paid in hryvnia at the tour operator’s rate. I’ll work out the exact cost for your dates and preferences."
       },
       "items": [
         {
@@ -442,7 +446,7 @@
             "en": "Italy"
           },
           "tag": {
-            "uk": "Культура й гастрономія",
+            "uk": "Культура й кухня",
             "en": "Culture & food"
           },
           "text": {
@@ -486,8 +490,8 @@
             "en": "Exotic escape"
           },
           "text": {
-            "uk": "Рисові тераси, храми над океаном і вілли серед тропічної зелені. Острів, куди їдуть по натхнення.",
-            "en": "Rice terraces, clifftop temples and villas tucked into tropical greenery. The island people visit for inspiration."
+            "uk": "Рисові тераси, храми над океаном і вілли серед тропічної зелені. Острів, куди їдуть за натхненням.",
+            "en": "Rice terraces, clifftop temples and villas tucked into tropical greenery. An island people travel to for inspiration."
           },
           "price": {
             "uk": "від $1 490",
@@ -496,18 +500,18 @@
         },
         {
           "id": "dest-alps",
-          "image": "/uploads/destination-alps-ski.webp",
+          "image": "/uploads/destination-alps-matterhorn.webp",
           "name": {
             "uk": "Альпи",
             "en": "The Alps"
           },
           "tag": {
-            "uk": "Гірськолижний відпочинок",
+            "uk": "Гірські лижі",
             "en": "Ski holidays"
           },
           "text": {
             "uk": "Ідеально підготовлені траси, затишні шале й глінтвейн після катання. Курорти і для новачків, і для профі.",
-            "en": "Perfectly groomed slopes, cosy chalets and mulled wine après-ski. Resorts for beginners and pros alike."
+            "en": "Perfectly groomed slopes, cosy chalets and après-ski mulled wine. Resorts for beginners and pros alike."
           },
           "price": {
             "uk": "від $1 290",
@@ -540,11 +544,11 @@
           "id": "step-hello",
           "title": {
             "uk": "Знайомимося",
-            "en": "We get acquainted"
+            "en": "Getting to know you"
           },
           "text": {
-            "uk": "Напишіть мені в зручний месенджер або залиште заявку. Обговоримо бюджет, дати, склад компанії та ваші побажання.",
-            "en": "Message me on your favourite app or leave a request. We’ll talk about budget, dates, who’s travelling and what you’d love."
+            "uk": "Напишіть мені в зручний месенджер або зателефонуйте. Обговоримо бюджет, дати, склад компанії та ваші побажання.",
+            "en": "Message me on your favourite app or give me a call. We’ll talk about budget, dates, who’s travelling and what you’d love."
           }
         },
         {
@@ -576,8 +580,8 @@
             "en": "You enjoy every moment"
           },
           "text": {
-            "uk": "Під час подорожі я на зв’язку 24/7. А після повернення чекаю на ваші фото й враження — і вже маю ідеї для наступної поїздки.",
-            "en": "I’m available 24/7 while you’re away. When you’re back, I can’t wait to see your photos — and I already have ideas for next time."
+            "uk": "Під час подорожі я на зв’язку, а в термінових випадках — і поза робочими годинами. Після повернення чекаю на ваші фото й враження та вже маю ідеї для наступної поїздки.",
+            "en": "I stay in touch while you’re away — and in an emergency, even out of hours. Once you’re back, I’d love to see your photos, and I’ll already have ideas for next time."
           }
         }
       ]
@@ -598,18 +602,10 @@
         "en": "Moments worth *the journey*"
       },
       "subtitle": {
-        "uk": "Трохи світла, моря та свободи з поїздок — моїх і моїх клієнтів.",
-        "en": "A little light, sea and freedom from the road — from my trips and my clients’."
+        "uk": "Трохи світла, моря та свободи — настрій, заради якого ми подорожуємо.",
+        "en": "A little light, sea and freedom — the feeling we travel for."
       },
       "items": [
-        {
-          "id": "gal-hat",
-          "image": "/uploads/gallery-straw-hat-beach-bag.webp",
-          "caption": {
-            "uk": "Літо в деталях",
-            "en": "Summer in the details"
-          }
-        },
         {
           "id": "gal-santorini",
           "image": "/uploads/gallery-santorini-terrace.webp",
@@ -619,19 +615,19 @@
           }
         },
         {
+          "id": "gal-hat",
+          "image": "/uploads/gallery-straw-hat-beach-bag.webp",
+          "caption": {
+            "uk": "Літо в деталях",
+            "en": "Summer in the details"
+          }
+        },
+        {
           "id": "gal-plane",
           "image": "/uploads/gallery-airplane-window-sunset.webp",
           "caption": {
             "uk": "Над хмарами — назустріч новому",
             "en": "Above the clouds, on the way to somewhere new"
-          }
-        },
-        {
-          "id": "gal-pool",
-          "image": "/uploads/gallery-poolside-loungers.webp",
-          "caption": {
-            "uk": "Неспішний ранок біля басейну",
-            "en": "A slow morning by the pool"
           }
         },
         {
@@ -651,14 +647,6 @@
           }
         },
         {
-          "id": "gal-sunset",
-          "image": "/uploads/gallery-sunset-parasol.webp",
-          "caption": {
-            "uk": "Вечір біля моря",
-            "en": "Evening by the sea"
-          }
-        },
-        {
           "id": "gal-parasols",
           "image": "/uploads/gallery-white-parasols.webp",
           "caption": {
@@ -667,11 +655,27 @@
           }
         },
         {
-          "id": "gal-beach",
-          "image": "/uploads/gallery-beach-chairs.webp",
+          "id": "gal-pool",
+          "image": "/uploads/gallery-poolside-loungers.webp",
           "caption": {
-            "uk": "Пляж, де нікуди не треба поспішати",
-            "en": "A beach with nowhere to rush to"
+            "uk": "Неспішний ранок біля басейну",
+            "en": "A slow morning by the pool"
+          }
+        },
+        {
+          "id": "gal-old-town",
+          "image": "/uploads/gallery-old-town-walk.webp",
+          "caption": {
+            "uk": "Неспішна прогулянка старим містом",
+            "en": "A slow wander through the old town"
+          }
+        },
+        {
+          "id": "gal-sunset",
+          "image": "/uploads/gallery-sunset-parasol.webp",
+          "caption": {
+            "uk": "Вечір біля моря",
+            "en": "Evening by the sea"
           }
         }
       ]
@@ -725,7 +729,7 @@
           },
           "text": {
             "uk": "Їздили втрьох із сином, якому чотири роки. Готель — саме такий, як ми просили: пологий вхід у море, чудовий дитячий клуб, смачна кухня. Коли затримали рейс, Анна була на зв’язку й допомогла з нічним трансфером.",
-            "en": "We travelled with our four-year-old son. The hotel was exactly what we’d asked for: a gentle sea, a wonderful kids’ club and delicious food. When our flight was delayed, Anna stayed in touch and sorted out a late-night transfer."
+            "en": "We travelled with our four-year-old son. The hotel was exactly what we’d asked for: a gently sloping beach, a wonderful kids’ club and delicious food. When our flight was delayed, Anna stayed in touch and sorted out a late-night transfer."
           },
           "photo": "",
           "rating": 5
@@ -775,8 +779,8 @@
             "en": "UAE, 2024"
           },
           "text": {
-            "uk": "Звернулася за тиждень до відпустки, майже без надії на хороші варіанти. Анна знайшла готель на першій лінії в Дубаї за дуже приємною ціною. Тепер усі поїздки планую тільки з нею.",
-            "en": "I got in touch just a week before my holiday with little hope of finding anything good. Anna found a beachfront hotel in Dubai at a really pleasant price. Now I plan every trip with her."
+            "uk": "Звернулася за тиждень до відпустки, майже без надії на хороші варіанти. Анна знайшла готель на першій лінії в Дубаї за дуже вигідною ціною. Тепер усі поїздки планую тільки з нею.",
+            "en": "I got in touch just a week before my holiday with little hope of finding anything good. Anna found a beachfront hotel in Dubai at a great price. Now I plan every trip with her."
           },
           "photo": "",
           "rating": 5
@@ -793,7 +797,7 @@
           },
           "text": {
             "uk": "Хотіли взимку на море, але без виснажливої дороги. Анна запропонувала Ель-Гуну — і це було саме те, що треба: тиша, лагуни, неймовірний риф. Дякуємо за турботу на кожному етапі!",
-            "en": "We wanted a winter beach break without an exhausting journey. Anna suggested El Gouna, and it was exactly what we needed: peace and quiet, lagoons and an incredible reef. Thank you for caring at every step!"
+            "en": "We wanted a winter beach break without an exhausting journey. Anna suggested El Gouna, and it was exactly what we needed: peace and quiet, lagoons and an incredible reef. Thank you for looking after us every step of the way!"
           },
           "photo": "",
           "rating": 5
@@ -897,8 +901,8 @@
             "en": "How much do your services cost?"
           },
           "answer": {
-            "uk": "Для вас консультація та підбір туру безкоштовні: мою роботу оплачує туроператор. Ціна туру при цьому така сама, як у туроператора, а часто й вигідніша завдяки акціям і раннім бронюванням.",
-            "en": "Consultations and trip planning are free for you — my work is paid for by the tour operator. The price stays the same as the operator’s own, and is often better thanks to special offers and early-booking deals."
+            "uk": "Для вас консультація та підбір туру безкоштовні: мою роботу оплачує туроператор. Ціна туру така сама, як у туроператора, а з акціями й раннім бронюванням може бути ще вигіднішою.",
+            "en": "Consultations and trip planning are free for you — my work is paid for by the tour operator. The price is the same as the operator’s own, and with special offers and early-booking deals it can be even better."
           }
         },
         {
@@ -908,8 +912,8 @@
             "en": "How far in advance should I get in touch?"
           },
           "answer": {
-            "uk": "Ідеально — за 1–3 місяці: так більше вибору готелів і вигідніші ціни. На свята та шкільні канікули — ще раніше. Але й гарячі тури за кілька днів до вильоту теж знаходимо.",
-            "en": "Ideally 1–3 months ahead: you get more hotels to choose from and better prices. For public holidays and school breaks, even earlier. That said, we can find last-minute deals just days before departure, too."
+            "uk": "Ідеально — за 1–3 місяці: так більше вибору готелів і вигідніші ціни. На свята та шкільні канікули — ще раніше. А гарячий тур за кілька днів до вильоту теж знайду.",
+            "en": "Ideally 1–3 months ahead: you get more hotels to choose from and better prices. For public holidays and school breaks, even earlier. That said, I can also find a last-minute deal just days before departure."
           }
         },
         {
@@ -941,8 +945,8 @@
             "en": "What if something goes wrong during the trip?"
           },
           "answer": {
-            "uk": "Писати мені: я на зв’язку 24/7 у Telegram і Viber. Затримка рейсу, зміна трансферу, питання до готелю — вирішуємо разом і швидко. А страховка, яку я оформлюю, покриває медичні та інші непередбачені ситуації.",
-            "en": "Message me — I’m available 24/7 on Telegram and Viber. Flight delays, transfer changes, questions for the hotel — we sort them out together, fast. And the insurance I arrange covers medical and other unexpected situations."
+            "uk": "Пишіть мені в Telegram чи Viber — у термінових ситуаціях відповідаю й поза робочими годинами. Затримка рейсу, зміна трансферу, питання до готелю — вирішуємо разом і швидко. А страховка, яку я оформлюю, покриває медичні та інші непередбачені ситуації.",
+            "en": "Message me on Telegram or Viber — if it’s urgent, I reply even out of hours. Flight delays, transfer changes, questions for the hotel — we sort them out together, fast. And the insurance I arrange covers medical and other unexpected situations."
           }
         },
         {
@@ -974,19 +978,19 @@
         "en": "Tell me where you *dream* of going"
       },
       "text": {
-        "uk": "Напишіть мені в Telegram, Viber чи Instagram, зателефонуйте або залиште заявку — я відповім і запропоную кілька ідей уже сьогодні.",
-        "en": "Message me on Telegram, Viber or Instagram, give me a call or leave a request — I’ll get back to you with a few ideas today."
+        "uk": "Напишіть мені в Telegram, Viber чи Instagram або зателефонуйте — я відповім у робочий час і запропоную кілька ідей.",
+        "en": "Message me on Telegram, Viber or Instagram, or give me a call — I’ll reply during working hours with a few ideas."
       },
       "note": {
-        "uk": "Зазвичай відповідаю протягом години",
-        "en": "I usually reply within an hour"
+        "uk": "Зазвичай відповідаю протягом години в робочий час",
+        "en": "I usually reply within an hour during working hours"
       },
       "formEnabled": true,
       "formTitle": {
         "uk": "Заявка на підбір туру",
         "en": "Trip request"
       },
-      "image": "/uploads/brand-logo-mockup.webp"
+      "image": ""
     }
   }
 }

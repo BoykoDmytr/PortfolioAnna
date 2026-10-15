@@ -13,7 +13,7 @@
 <% items.forEach((it, i) => { -%>
       <details class="faq__item" data-reveal style="--d: <%= Math.min(i, 4) %>">
         <summary class="faq__q">
-          <span class="faq__q-text"><%= t(it.question) %></span>
+          <span class="faq__q-text"><%= kit.typo(t(it.question)) %></span>
           <span class="faq__toggle" aria-hidden="true"><%- icon('plus') %></span>
         </summary>
         <div class="faq__a">

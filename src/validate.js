@@ -22,6 +22,30 @@ const CONTROL_RE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
 
 const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
+/**
+ * Українська форма множини: pluralUk(4, ['символ', 'символи', 'символів']) → 'символи'.
+ * forms: [1, 2–4, 5+] (21 символ, 22 символи, 25 символів, 11–14 символів).
+ */
+function pluralUk(n, forms) {
+  const abs = Math.abs(Number(n)) % 100;
+  const last = abs % 10;
+  if (abs > 10 && abs < 20) return forms[2];
+  if (last === 1) return forms[0];
+  if (last >= 2 && last <= 4) return forms[1];
+  return forms[2];
+}
+
+/** «не більше N символів» (родовий відмінок: 1 → символу, інакше → символів). */
+function charsAtMost(n) {
+  const abs = Math.abs(Number(n)) % 100;
+  return `не більше ${n} ${abs % 10 === 1 && abs !== 11 ? 'символу' : 'символів'}`;
+}
+
+/** «щонайменше N символи» (2 символи, 5 символів, 1 символ). */
+function charsAtLeast(n) {
+  return `щонайменше ${n} ${pluralUk(n, ['символ', 'символи', 'символів'])}`;
+}
+
 function newId() {
   return crypto.randomBytes(4).toString('hex');
 }
@@ -89,7 +113,7 @@ function sanitizeField(field, value, path, errors) {
       for (const code of LANG_CODES) {
         let v = typeof src[code] === 'string' ? normalizeText(src[code], multiline) : '';
         if (v.length > max) {
-          errors.push({ path: `${path}.${code}`, message: `Задовгий текст: максимум ${max} символів` });
+          errors.push({ path: `${path}.${code}`, message: `Задовгий текст: ${charsAtMost(max)}` });
           v = v.slice(0, max);
         }
         out[code] = v;
@@ -106,11 +130,11 @@ function sanitizeField(field, value, path, errors) {
       let v = normalizeText(value, false);
       if (field.normalize === 'handle') v = normalizeHandle(v);
       if (v.length > max) {
-        errors.push({ path, message: `Задовгий текст: максимум ${max} символів` });
+        errors.push({ path, message: `Задовгий текст: ${charsAtMost(max)}` });
         v = v.slice(0, max);
       }
       if (v && field.pattern && !new RegExp(field.pattern).test(v)) {
-        errors.push({ path, message: 'Невірний формат' });
+        errors.push({ path, message: 'Неправильний формат' });
       }
       return v;
     }
@@ -135,7 +159,7 @@ function sanitizeField(field, value, path, errors) {
       if (value === undefined || value === null || value === '') return '';
       const v = typeof value === 'string' ? value.trim() : '';
       if (!v || !IMAGE_RE.test(v) || v.includes('..') || v.includes('//', v.startsWith('https://') ? 8 : 0)) {
-        errors.push({ path, message: 'Невірний шлях до зображення' });
+        errors.push({ path, message: 'Неправильний шлях до зображення' });
         return '';
       }
       return v;
@@ -143,7 +167,7 @@ function sanitizeField(field, value, path, errors) {
 
     case 'color': {
       if (typeof value === 'string' && COLOR_RE.test(value.trim())) return value.trim().toLowerCase();
-      if (value !== undefined && value !== null && value !== '') errors.push({ path, message: 'Невірний колір' });
+      if (value !== undefined && value !== null && value !== '') errors.push({ path, message: 'Неправильний колір' });
       return defaultFor(field);
     }
 
@@ -248,4 +272,4 @@ function collectImageRefs(content) {
   return refs;
 }
 
-module.exports = { sanitizeContent, collectImageRefs, normalizeText };
+module.exports = { sanitizeContent, collectImageRefs, normalizeText, pluralUk, charsAtMost, charsAtLeast };

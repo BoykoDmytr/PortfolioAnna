@@ -26,7 +26,7 @@ export function assetUrl(path) {
 }
 
 const MESSAGES = {
-  network: 'Немає зв’язку з сервером. Перевірте, чи запущено сайт на комп’ютері (вікно сервера не закрите), і спробуйте ще раз.',
+  network: 'Немає зв’язку із сайтом. Перевірте інтернет і спробуйте ще раз.',
   400: 'Сервер не прийняв дані. Перевірте введене і спробуйте ще раз.',
   403: 'Запит відхилено з міркувань безпеки. Оновіть сторінку і спробуйте ще раз.',
   404: 'Не знайдено — можливо, це вже видалено.',
@@ -37,11 +37,12 @@ const MESSAGES = {
 };
 
 export class ApiError extends Error {
-  constructor(message, status = 0, details = undefined) {
+  constructor(message, status = 0, details = undefined, data = null) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.details = Array.isArray(details) ? details : [];
+    this.data = data && typeof data === 'object' ? data : {}; // уся відповідь сервера (наприклад, attemptsLeft)
   }
 }
 
@@ -52,7 +53,7 @@ function fallbackMessage(status) {
 
 function errorFrom(status, data) {
   const message = data && typeof data.error === 'string' && data.error ? data.error : fallbackMessage(status);
-  return new ApiError(message, status, data && data.details);
+  return new ApiError(message, status, data && data.details, data);
 }
 
 let reauthHandler = null;
@@ -74,10 +75,12 @@ function filenameFrom(disposition, fallback) {
  * @param {*}      [opts.body]  буде надіслано як JSON
  * @param {boolean}[opts.auth=true]  false — не показувати екран входу на 401 (для фонових запитів)
  * @param {boolean}[opts.blob]  повернути { blob, filename } замість JSON
+ * @param {object} [opts.headers]  додаткові заголовки запиту
+ * @param {function}[opts.onHeaders]  отримує заголовки відповіді (наприклад, X-Content-Revision)
  */
 export async function request(method, path, opts = {}) {
-  const { body, auth = true, blob = false } = opts;
-  const headers = { Accept: 'application/json' };
+  const { body, auth = true, blob = false, onHeaders } = opts;
+  const headers = { Accept: 'application/json', ...(opts.headers || {}) };
   if (method !== 'GET') headers['X-Admin-Request'] = '1';
   const init = { method, headers, credentials: 'same-origin', cache: 'no-store' };
   if (body !== undefined) {
@@ -96,6 +99,7 @@ export async function request(method, path, opts = {}) {
     await reauthHandler();
     return request(method, path, opts);
   }
+  if (onHeaders) onHeaders(res.headers);
 
   if (!res.ok) {
     let data = null;
@@ -135,14 +139,14 @@ export function checkUploadFile(file) {
   const name = file.name || 'файл';
   const ext = (name.split('.').pop() || '').toLowerCase();
   if (ext === 'heic' || ext === 'heif' || /heic|heif/i.test(file.type)) {
-    return `«${name}»: формат HEIC (фото з iPhone) не підтримується. Збережіть фото як JPG і спробуйте ще раз.`;
+    return `«${name}»: формат HEIC (фото з iPhone) цей браузер не відкриває. Збережіть фото як JPG або надішліть його собі в месенджер і завантажте вже звідти.`;
   }
   if (ext === 'svg' || file.type === 'image/svg+xml') {
     return `«${name}»: SVG-файли не підтримуються. Завантажте PNG, JPG або WebP.`;
   }
   const okType = UPLOAD_TYPES.includes(file.type) || ['jpg', 'jpeg', 'png', 'webp', 'avif', 'gif'].includes(ext);
   if (!okType) return `«${name}» — це не фото. Підходять файли JPG, PNG, WebP, AVIF або GIF.`;
-  if (file.size > UPLOAD_MAX_BYTES) return `«${name}» завеликий (понад 15 МБ). Зменште фото і спробуйте ще раз.`;
+  if (file.size > UPLOAD_MAX_BYTES) return `«${name}» завеликий (понад 15 МБ), і зменшити його автоматично не вдалося. Оберіть інше фото або надішліть це фото собі в месенджер і завантажте вже звідти — так воно стане меншим.`;
   return '';
 }
 

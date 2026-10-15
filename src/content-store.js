@@ -16,6 +16,7 @@ const fsp = require('fs/promises');
 const path = require('path');
 const crypto = require('crypto');
 const { sanitizeContent } = require('./validate');
+const { schema } = require('./schema');
 
 const MAX_BACKUPS = 30;
 const BACKUP_RE = /^content-(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})(?:-(\d{1,3}))?\.json$/;
@@ -160,6 +161,39 @@ function compareBackupsDesc(a, b) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Частини контенту (для підпису «що змінилося» біля резервних копій)   */
+/* ------------------------------------------------------------------ */
+
+/** 'settings', 'contacts', …, 'order', 'sections.hero', … — ті самі ключі, що й у адмінці (unitLabel). */
+function contentUnits() {
+  return [
+    ...schema.groups.map((g) => g.key),
+    'order',
+    ...schema.sections.map((def) => `sections.${def.type}`),
+  ];
+}
+
+function unitValue(content, key) {
+  if (!isPlainObject(content)) return undefined;
+  if (key.startsWith('sections.')) return isPlainObject(content.sections) ? content.sections[key.slice(9)] : undefined;
+  return content[key];
+}
+
+/** Частини, що відрізняються між двома версіями контенту. */
+function changedUnits(before, after) {
+  return contentUnits().filter((key) => JSON.stringify(unitValue(before, key)) !== JSON.stringify(unitValue(after, key)));
+}
+
+async function readJsonAsync(file) {
+  try {
+    const value = JSON.parse((await fsp.readFile(file, 'utf8')).replace(/^\uFEFF/, ''));
+    return isPlainObject(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* ContentStore                                                       */
 /* ------------------------------------------------------------------ */
 
@@ -176,6 +210,17 @@ class ContentStore {
     this.logger = logger;
     this.content = null;
     this.saving = Promise.resolve();
+    this.revisionCache = { content: null, value: '' };
+  }
+
+  /** Короткий відбиток поточного вмісту (змінюється з кожним збереженням, що щось змінило). */
+  get revision() {
+    const content = this.get();
+    if (this.revisionCache.content !== content) {
+      const value = crypto.createHash('sha256').update(JSON.stringify(content)).digest('hex').slice(0, 20);
+      this.revisionCache = { content, value };
+    }
+    return this.revisionCache.value;
   }
 
   /** Завантажує content.json під час старту. Ніколи не падає через погані поля. */
@@ -223,15 +268,17 @@ class ContentStore {
 
   /**
    * Перевіряє і зберігає новий контент.
-   * → { content } | { errors: [{ path, message }] }
+   * expectedRevision — якщо задано і вміст тим часом змінився (інший пристрій), нічого не зберігається.
+   * → { content } | { errors: [{ path, message }] } | { conflict: true }
    */
-  save(input) {
-    const run = this.saving.catch(() => {}).then(() => this.saveNow(input));
+  save(input, { expectedRevision = '' } = {}) {
+    const run = this.saving.catch(() => {}).then(() => this.saveNow(input, expectedRevision));
     this.saving = run;
     return run;
   }
 
-  async saveNow(input) {
+  async saveNow(input, expectedRevision = '') {
+    if (expectedRevision && expectedRevision !== this.revision) return { conflict: true };
     const { content, errors } = sanitizeContent(input);
     if (errors.length) return { errors };
 
@@ -282,18 +329,30 @@ class ContentStore {
     }
   }
 
-  /** → [{ name, createdAt, size }] найновіші першими */
+  /**
+   * → [{ name, createdAt, size, changes }] найновіші першими.
+   * changes — частини сайту, які змінило збереження ПІСЛЯ цієї копії (порівняння з наступною
+   * новішою версією, для найновішої — з поточним сайтом), щоб було видно, яку копію відновлювати.
+   */
   async listBackups() {
     const entries = await this.readBackupEntries();
     const out = [];
+    let newer = this.get();
     for (const entry of entries) {
+      const file = path.join(this.backupsDir, entry.name);
+      let stat;
       try {
-        const stat = await fsp.stat(path.join(this.backupsDir, entry.name));
-        if (!stat.isFile()) continue;
-        out.push({ name: entry.name, createdAt: entry.parsed.date.toISOString(), size: stat.size });
+        stat = await fsp.stat(file);
       } catch {
-        // файл щойно видалили — пропускаємо
+        continue; // файл щойно видалили — пропускаємо
       }
+      if (!stat.isFile()) continue;
+      const raw = await readJsonAsync(file);
+      const data = raw ? sanitizeContent(raw).content : null;
+      const item = { name: entry.name, createdAt: entry.parsed.date.toISOString(), size: stat.size };
+      if (data && newer) item.changes = changedUnits(data, newer);
+      out.push(item);
+      newer = data;
     }
     return out;
   }
@@ -323,6 +382,7 @@ class ContentStore {
 
 module.exports = {
   ContentStore,
+  changedUnits,
   MAX_BACKUPS,
   isBackupName,
   readJsonFile,

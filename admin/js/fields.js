@@ -5,11 +5,11 @@
  * Обгортка поля має data-path — за ним підсвічуються помилки сервера (422 → details[].path).
  */
 
-import { h, nextId, parseSvg, clone } from './dom.js';
+import { h, append, nextId, parseSvg, clone, describedBy, getByPath, isTouch } from './dom.js';
 import { icon } from './icons.js';
 import { assetUrl } from './api.js';
-import { state, changed, languages, newListItem, textOf, defaultValue } from './state.js';
-import { toast, confirmDialog, openModal, switchControl, button, iconButton } from './ui.js';
+import { state, changed, emit, on, languages, newListItem, textOf, defaultValue } from './state.js';
+import { toast, confirmDialog, openModal, switchControl, button, iconButton, actionSheet } from './ui.js';
 import { pickImage, chooseFiles, uploadOne, bindDrop } from './media.js';
 
 /* ---------------- довідники ---------------- */
@@ -58,6 +58,15 @@ export const THEME_PRESETS = {
   terracotta: { accent: '#a65e43', bg: '#faf4ef', sand: '#d9b8a5' },
 };
 
+/** Рекомендована довжина (Google обрізає довші заголовок і опис), якщо схема не задає field.recommended. */
+const RECOMMENDED = {
+  'seo.title': 60,
+  'seo.description': 160,
+};
+
+/** Як читати мітки мов UA / EN для екранних читачів. */
+const LANG_SPOKEN = { uk: 'українською', en: 'англійською' };
+
 const IMAGE_SIZE_HINTS = {
   'settings.logo': 'logo',
   'seo.ogImage': 'wide',
@@ -72,8 +81,15 @@ function notify(el, path) {
   el.dispatchEvent(new CustomEvent('fieldchange', { bubbles: true, detail: { path } }));
 }
 
-function counterText(el, length, max) {
+function counterText(el, length, max, recommended) {
   if (!max) return;
+  if (recommended) {
+    // Лічильник видно завжди: так одразу зрозуміло, скільки ще можна написати
+    el.textContent = `${length} / ${recommended}`;
+    el.classList.toggle('is-near', length > recommended);
+    el.classList.toggle('is-full', length >= max);
+    return;
+  }
   const near = length >= Math.floor(max * 0.7);
   el.textContent = near ? `${length} / ${max}` : '';
   el.classList.toggle('is-near', length >= Math.floor(max * 0.9));
@@ -93,6 +109,7 @@ export function autosizeAll(root) {
 function shell(field, path, { labelFor, extraClass, counter = false } = {}) {
   const labelId = nextId('lbl');
   const helpId = field.help ? nextId('help') : undefined;
+  const errorId = nextId('err');
   const counterEl = counter ? h('span', { class: 'counter' }) : null;
   const labelChildren = [field.label, field.required && h('span', { class: 'field__req', title: 'Обов’язкове поле', text: ' *' })];
   const label = labelFor
@@ -102,8 +119,8 @@ function shell(field, path, { labelFor, extraClass, counter = false } = {}) {
     h('div', { class: 'field__head' }, label, counterEl),
     field.help && h('p', { class: 'field__help', id: helpId, text: field.help }),
   );
-  const error = h('p', { class: 'field__error', hidden: true });
-  return { root, labelId, helpId, counterEl, error };
+  const error = h('p', { class: 'field__error', id: errorId, hidden: true });
+  return { root, labelId, helpId, counterEl, error, errorId };
 }
 
 /* ---------------- текст UA / EN ---------------- */
@@ -115,26 +132,32 @@ function localizedField(field, obj, path) {
   const { root, labelId, helpId, error } = shell(field, path, { extraClass: 'field--i18n' });
   const langs = languages();
   const cols = [];
+  const recommended = field.recommended || RECOMMENDED[path];
 
   for (const lang of langs) {
     const id = nextId();
     const tagId = nextId('tag');
+    const spokenId = nextId('lang');
     const colPath = `${path}.${lang.code}`;
     const input = multiline
       ? h('textarea', { id, class: 'input', rows: 3, lang: lang.code, spellcheck: true })
       : h('input', { id, type: 'text', class: 'input', lang: lang.code, autocomplete: 'off' });
     input.value = typeof value[lang.code] === 'string' ? value[lang.code] : '';
     if (field.max) input.maxLength = field.max;
-    input.setAttribute('aria-labelledby', `${labelId} ${tagId}`);
+    // «Надзаголовок українською», а не «Надзаголовок U A»
+    input.setAttribute('aria-labelledby', `${labelId} ${spokenId}`);
     if (helpId) input.setAttribute('aria-describedby', helpId);
     const counter = h('span', { class: 'counter' });
     const hint = h('p', { class: 'i18n__hint', hidden: true });
+    const over = recommended ? h('p', { class: 'field__warn i18n__over', id: nextId('warn'), hidden: true, 'aria-live': 'polite' }) : null;
     const col = h('div', { class: 'i18n__col', dataset: { path: colPath, lang: lang.code } },
       h('div', { class: 'i18n__bar' },
         h('label', { class: 'lang-tag', id: tagId, for: id, title: lang.label, text: lang.short }),
+        h('span', { class: 'sr-only', id: spokenId, text: LANG_SPOKEN[lang.code] || lang.label }),
         counter),
       input,
-      h('p', { class: 'field__error', hidden: true }),
+      h('p', { class: 'field__error', id: nextId('err'), hidden: true }),
+      over,
       hint);
     input.addEventListener('input', () => {
       value[lang.code] = input.value;
@@ -142,12 +165,18 @@ function localizedField(field, obj, path) {
       refresh();
       notify(input, colPath);
     });
-    cols.push({ lang, input, counter, hint });
+    cols.push({ lang, input, counter, hint, over });
   }
 
   function refresh() {
     for (const c of cols) {
-      counterText(c.counter, c.input.value.length, field.max);
+      counterText(c.counter, c.input.value.length, field.max, recommended);
+      if (c.over) {
+        const tooLong = c.input.value.length > recommended;
+        c.over.hidden = !tooLong;
+        c.over.textContent = tooLong ? `Довше за ${recommended} символів — Google, найімовірніше, обріже кінець.` : '';
+        describedBy(c.input, c.over.id, tooLong);
+      }
       const others = cols.filter((o) => o !== c && o.input.value.trim());
       const empty = !c.input.value.trim();
       c.hint.hidden = !(empty && others.length);
@@ -160,7 +189,7 @@ function localizedField(field, obj, path) {
   }
   refresh();
 
-  root.append(h('div', { class: 'i18n' }, cols.map((c) => c.input.parentElement)), error);
+  append(root, h('div', { class: 'i18n' }, cols.map((c) => c.input.parentElement)), error);
   return root;
 }
 
@@ -192,7 +221,7 @@ function stringField(field, obj, path) {
   input.value = obj[field.key] === undefined || obj[field.key] === null ? '' : String(obj[field.key]);
   if (field.max) input.maxLength = field.max;
   if (helpId) input.setAttribute('aria-describedby', helpId);
-  const warn = h('p', { class: 'field__warn', hidden: true });
+  const warn = h('p', { class: 'field__warn', id: nextId('warn'), hidden: true, 'aria-live': 'polite' });
   if (PATTERN_HINTS[kind]) root.dataset.hint = PATTERN_HINTS[kind];
 
   const check = () => {
@@ -201,6 +230,7 @@ function stringField(field, obj, path) {
     warn.hidden = !bad;
     warn.textContent = bad ? (PATTERN_HINTS[kind] || 'Перевірте формат') : '';
     root.classList.toggle('has-warning', bad);
+    describedBy(input, warn.id, bad);
   };
 
   input.addEventListener('input', () => {
@@ -226,7 +256,7 @@ function stringField(field, obj, path) {
   const control = field.normalize === 'handle'
     ? h('div', { class: 'input-group' }, h('span', { class: 'input-group__prefix', 'aria-hidden': 'true', text: '@' }), input)
     : input;
-  root.append(control, warn, error);
+  append(root, control, warn, error);
   return root;
 }
 
@@ -279,7 +309,7 @@ function ratingField(field, obj, path) {
     group.append(b);
   }
   render();
-  root.append(group, error);
+  append(root, group, error);
   return root;
 }
 
@@ -325,7 +355,7 @@ function numberField(field, obj, path) {
     if (input.value !== '' && Number.isFinite(Number(input.value))) set(input.value, 'input');
   });
   input.addEventListener('change', () => set(input.value));
-  root.append(control, error);
+  append(root, control, error);
   return root;
 }
 
@@ -342,7 +372,7 @@ function booleanField(field, obj, path) {
       notify(sw.input, path);
     },
   });
-  root.append(sw.root, h('p', { class: 'field__error', hidden: true }));
+  append(root, sw.root, h('p', { class: 'field__error', id: nextId('err'), hidden: true }));
   return root;
 }
 
@@ -351,24 +381,42 @@ function booleanField(field, obj, path) {
 function imageField(field, obj, path) {
   const purpose = path === 'settings.logo' ? 'logo' : 'photo';
   const variant = IMAGE_SIZE_HINTS[path] || (path.endsWith('.photo') && path.startsWith('sections.about') ? 'portrait' : 'photo');
-  const { root, error } = shell(field, path, { extraClass: `imgf imgf--${variant}` });
+  const { root, labelId, helpId, error } = shell(field, path, { extraClass: `imgf imgf--${variant}` });
 
   const img = h('img', { class: 'imgf__img', alt: '', decoding: 'async' });
-  const empty = h('span', { class: 'imgf__empty' }, icon('image'), h('span', { text: 'Перетягніть фото сюди' }));
+  // На телефоні перетягнути файл неможливо — пропонуємо натиснути
+  const emptyText = isTouch() ? 'Натисніть, щоб додати фото' : 'Перетягніть фото сюди або натисніть';
+  const empty = h('span', { class: 'imgf__empty' }, icon('image'), h('span', { text: emptyText }));
+  // Головний екран: попередній перегляд затемнення, як на сайті
+  const shade = path === 'sections.hero.image' ? h('span', { class: 'imgf__shade', 'aria-hidden': 'true' }) : null;
   const bar = h('span', { class: 'progress__bar' });
   const progress = h('div', { class: 'progress imgf__progress', hidden: true }, bar);
-  const preview = h('div', { class: 'imgf__preview' }, img, empty, progress);
+  const preview = h('div', { class: 'imgf__preview' }, img, shade, empty, progress);
   const name = h('p', { class: 'imgf__name' });
 
   const uploadBtn = button({ label: 'Завантажити фото', iconName: 'upload', variant: 'secondary', size: 'sm' });
   const pickBtn = button({ label: 'Обрати з медіатеки', iconName: 'images', variant: 'secondary', size: 'sm' });
   const clearBtn = button({ label: 'Прибрати', iconName: 'close', variant: 'ghost', size: 'sm' });
 
-  const warn = field.required ? h('p', { class: 'field__warn', hidden: true, text: 'Додайте фото — без нього цей блок на сайті виглядатиме порожнім.' }) : null;
+  // Підказки під полем: обов'язкове фото, вертикальне фото у «широкому» полі, помилка завантаження
+  const need = field.required ? h('p', { class: 'field__warn', id: nextId('warn'), hidden: true, text: 'Додайте фото — без нього цей блок на сайті виглядатиме порожнім.' }) : null;
+  const shape = variant === 'wide' ? h('p', { class: 'field__warn', id: nextId('warn'), hidden: true, text: 'Це вертикальне фото: на комп’ютері його буде сильно обрізано згори й знизу. Краще обрати горизонтальне.' }) : null;
+  const problem = h('p', { class: 'field__warn imgf__problem', id: nextId('warn'), hidden: true });
+  const notes = h('div', { class: 'imgf__notes', 'aria-live': 'polite' }, need, shape, problem);
+  const box = h('div', { class: 'imgf__box', role: 'group', 'aria-labelledby': labelId });
+  if (helpId) describedBy(box, helpId, true);
+
+  const showNote = (el, on, text) => {
+    if (!el) return;
+    if (text !== undefined) el.textContent = text;
+    el.hidden = !on;
+    describedBy(box, el.id, on);
+  };
 
   const update = () => {
     const v = obj[field.key] || '';
-    if (warn) warn.hidden = Boolean(v);
+    showNote(need, !v);
+    showNote(shape, false);
     root.classList.toggle('is-empty', !v);
     root.classList.remove('is-broken');
     if (v) img.src = assetUrl(v);
@@ -382,32 +430,52 @@ function imageField(field, obj, path) {
       name.textContent = 'Не вдалося показати фото — оберіть інше';
     }
   });
+  img.addEventListener('load', () => {
+    showNote(shape, img.naturalHeight > img.naturalWidth * 1.05);
+  });
 
   const set = (url) => {
     obj[field.key] = url;
-    update();
-    notify(root, path);
+    showNote(problem, false);
+    if (root.isConnected) {
+      update();
+      notify(root, path);
+    } else {
+      // Поки фото завантажувалося, сторінку перемалювали (наприклад, після збереження) — оновлюємо її знову
+      changed(path);
+      emit('draft-replaced');
+    }
   };
 
   const upload = async (file) => {
-    if (!file) return;
+    if (!file || root.classList.contains('is-uploading')) return;
+    showNote(problem, false);
     root.classList.add('is-uploading');
     progress.hidden = false;
     bar.style.width = '0';
     uploadBtn.disabled = true;
-    const result = await uploadOne(file, { purpose, onProgress: (p) => { bar.style.width = `${Math.round(p * 100)}%`; } });
+    const result = await uploadOne(file, {
+      purpose,
+      onProgress: (p) => { bar.style.width = `${Math.round(p * 100)}%`; },
+      onError: (message) => showNote(problem, true, message),
+    });
     root.classList.remove('is-uploading');
     progress.hidden = true;
     uploadBtn.disabled = false;
     if (result) {
       set(result.url);
-      toast('Фото завантажено. Не забудьте зберегти зміни.');
+      toast('Фото завантажено. Не забудьте зберегти зміни.', { key: 'upload' });
     }
   };
-
-  uploadBtn.addEventListener('click', async () => {
+  const chooseAndUpload = async () => {
     const [file] = await chooseFiles();
     upload(file);
+  };
+
+  uploadBtn.addEventListener('click', chooseAndUpload);
+  // Порожнє поле — велика зрозуміла ціль: натиснули → вибір фото (клавіатурою — кнопка «Завантажити фото»)
+  preview.addEventListener('click', () => {
+    if (root.classList.contains('is-empty') || root.classList.contains('is-broken')) chooseAndUpload();
   });
   pickBtn.addEventListener('click', async () => {
     const url = await pickImage({ current: obj[field.key], purpose, title: field.label });
@@ -416,16 +484,28 @@ function imageField(field, obj, path) {
   clearBtn.addEventListener('click', () => set(''));
   bindDrop(preview, (files) => upload(files[0]));
 
+  if (shade) {
+    const paintShade = () => {
+      const pct = Math.max(0, Math.min(80, Number(obj.overlay) || 0));
+      root.style.setProperty('--ov', String(pct / 100));
+    };
+    paintShade();
+    const off = on('change', (changedPath) => {
+      if (!root.isConnected) {
+        off();
+        return;
+      }
+      if (changedPath === path.replace(/image$/, 'overlay')) paintShade();
+    });
+  }
+
   update();
-  root.append(
-    h('div', { class: 'imgf__box' },
-      preview,
-      h('div', { class: 'imgf__side' },
-        name,
-        h('div', { class: 'imgf__actions' }, uploadBtn, pickBtn, clearBtn))),
-    warn,
-    error,
-  );
+  append(box,
+    preview,
+    h('div', { class: 'imgf__side' },
+      name,
+      h('div', { class: 'imgf__actions' }, uploadBtn, pickBtn, clearBtn)));
+  append(root, box, notes, error);
   return root;
 }
 
@@ -475,7 +555,7 @@ function colorField(field, obj, path) {
     hex.value = current();
   });
   paint();
-  root.append(h('div', { class: 'color' }, h('span', { class: 'color__well' }, picker), hex, h('div', { class: 'swatches' }, swatches)), error);
+  append(root, h('div', { class: 'color' }, h('span', { class: 'color__well' }, picker), hex, h('div', { class: 'swatches', role: 'group', 'aria-label': `${field.label}: готові кольори` }, swatches)), error);
   return root;
 }
 
@@ -498,7 +578,7 @@ function presetCards(field, obj, path) {
       : [h('span', { class: 'preset__chip preset__chip--custom' })];
     group.append(h('label', { class: 'preset' }, input, h('span', { class: 'preset__chips', 'aria-hidden': 'true' }, chips), h('span', { class: 'preset__label', text: opt.label })));
   }
-  root.append(group, error);
+  append(root, group, error);
   return root;
 }
 
@@ -513,7 +593,7 @@ function selectField(field, obj, path) {
     obj[field.key] = select.value;
     notify(select, path);
   });
-  root.append(h('div', { class: 'select-wrap' }, select, icon('chevron', 'i select-wrap__chev')), error);
+  append(root, h('div', { class: 'select-wrap' }, select, icon('chevron', 'i select-wrap__chev')), error);
   return root;
 }
 
@@ -534,7 +614,7 @@ const iconLabel = (name) => {
 
 function pickIcon(current) {
   const modal = openModal({ title: 'Оберіть іконку', size: 'md' });
-  const grid = h('div', { class: 'icon-grid', role: 'listbox', 'aria-label': 'Іконки' });
+  const grid = h('div', { class: 'icon-grid', role: 'group', 'aria-label': 'Іконки' });
   for (const { value, label } of state.schema.icons || []) {
     const selected = value === current;
     grid.append(h('button', {
@@ -569,7 +649,7 @@ function iconField(field, obj, path) {
     }
   });
   update();
-  root.append(btn, error);
+  append(root, btn, error);
   return root;
 }
 
@@ -591,7 +671,7 @@ function listField(field, obj, path) {
       h('h3', { class: 'list__title', text: field.label }),
       count),
     field.help && h('p', { class: 'field__help', text: field.help }),
-    h('p', { class: 'field__error', hidden: true }),
+    h('p', { class: 'field__error', id: nextId('err'), hidden: true }),
     ol,
     h('div', { class: 'list__foot' }, addBtn, maxNote));
 
@@ -603,6 +683,13 @@ function listField(field, obj, path) {
     notify(root, path);
   }
 
+  const itemEl = (id) => ol.querySelector(`[data-id="${CSS.escape(id)}"]`);
+
+  /**
+   * focus: { id, selector, fallback, scroll, anchor, flash }
+   * anchor — позиція елемента на екрані до зміни: після перемальовування сторінку зсуваємо так,
+   * щоб елемент (і кнопка ↑ / ↓ під пальцем) лишився на тому самому місці.
+   */
   function rerender(focus) {
     ol.replaceChildren(...items.map((item, i) => renderItem(item, i)));
     count.textContent = Number.isFinite(max) ? `${items.length} з ${max}` : String(items.length);
@@ -611,17 +698,18 @@ function listField(field, obj, path) {
     maxNote.hidden = !full;
     maxNote.textContent = full ? `Це максимум для цього блоку (${max}). Щоб додати новий елемент, видаліть один з наявних.` : '';
     paintErrors(root);
-    if (focus) {
-      requestAnimationFrame(() => {
-        const li = ol.querySelector(`[data-id="${CSS.escape(focus.id)}"]`);
-        if (!li) return;
-        autosizeAll(li);
-        const target = focus.selector ? li.querySelector(focus.selector) : null;
-        const el = target && !target.disabled ? target : (focus.fallback ? li.querySelector(focus.fallback) : null);
-        if (focus.scroll) li.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-        if (el) el.focus({ preventScroll: !!focus.scroll });
-      });
-    }
+    if (!focus) return;
+    const li = itemEl(focus.id);
+    if (!li) return;
+    if (typeof focus.anchor === 'number') window.scrollBy(0, li.getBoundingClientRect().top - focus.anchor);
+    if (focus.flash) flashMoved(li);
+    requestAnimationFrame(() => {
+      autosizeAll(li);
+      const target = focus.selector ? li.querySelector(focus.selector) : null;
+      const el = target && !target.disabled ? target : (focus.fallback ? li.querySelector(focus.fallback) : null);
+      if (focus.scroll) li.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      if (el) el.focus({ preventScroll: true });
+    });
   }
 
   function renderItem(item, index) {
@@ -644,8 +732,17 @@ function listField(field, obj, path) {
         h('div', { class: 'item__actions' },
           iconButton({ iconName: 'up', label: 'Перемістити вище', className: 'js-up', disabled: index === 0, onClick: () => move(index, -1, '.js-up') }),
           iconButton({ iconName: 'down', label: 'Перемістити нижче', className: 'js-down', disabled: index === items.length - 1, onClick: () => move(index, 1, '.js-down') }),
-          iconButton({ iconName: 'copy', label: 'Дублювати', className: 'js-dup', disabled: items.length >= max, onClick: () => duplicate(index) }),
-          iconButton({ iconName: 'trash', label: 'Видалити', className: 'icon-btn--danger js-del', onClick: () => remove(index) }))),
+          // На широкому екрані — одразу під рукою; на телефоні ховаються в меню «⋯», щоб «Видалити» не стояло впритул до інших кнопок
+          iconButton({ iconName: 'copy', label: 'Дублювати', className: 'item__wide js-dup', disabled: items.length >= max, onClick: () => duplicate(index) }),
+          iconButton({ iconName: 'trash', label: 'Видалити', className: 'icon-btn--danger item__wide js-del', onClick: () => remove(index) }),
+          h('button', {
+            type: 'button',
+            class: 'icon-btn js-more',
+            'aria-label': 'Інші дії',
+            title: 'Інші дії: на початок, в кінець, дублювати, видалити',
+            'aria-haspopup': 'dialog',
+            onClick: () => moreActions(item),
+          }, icon('more')))),
       body);
 
     const updateHead = () => {
@@ -687,9 +784,15 @@ function listField(field, obj, path) {
     body.addEventListener('input', updateHead);
     body.addEventListener('fieldchange', updateHead);
 
-    // Перетягування мишею (на телефоні — кнопки ↑ ↓)
+    // Перетягування мишею (на телефоні — кнопки ↑ ↓ та «⋯»)
+    const undrag = () => {
+      li.draggable = false;
+    };
     grip.addEventListener('pointerdown', () => {
       li.draggable = true;
+      // Простий клік без перетягування не має лишати елемент «перетягуваним» —
+      // інакше мишею вже не виділити текст у його полях
+      document.addEventListener('pointerup', undrag, { once: true });
     });
     li.addEventListener('dragstart', (e) => {
       if (!li.draggable) return;
@@ -699,6 +802,7 @@ function listField(field, obj, path) {
       requestAnimationFrame(() => li.classList.add('is-dragging'));
     });
     li.addEventListener('dragend', () => {
+      document.removeEventListener('pointerup', undrag);
       li.draggable = false;
       li.classList.remove('is-dragging');
       for (const el of ol.querySelectorAll('.drop-before, .drop-after')) el.classList.remove('drop-before', 'drop-after');
@@ -730,16 +834,52 @@ function listField(field, obj, path) {
     const [moved] = items.splice(from, 1);
     items.splice(to, 0, moved);
     structural();
-    rerender();
+    rerender({ id: moved.id, flash: true });
   });
 
   function move(index, dir, selector) {
     const to = index + dir;
     if (to < 0 || to >= items.length) return;
+    const before = itemEl(items[index].id);
+    const anchor = before ? before.getBoundingClientRect().top : undefined;
     const [moved] = items.splice(index, 1);
     items.splice(to, 0, moved);
     structural();
-    rerender({ id: moved.id, selector, fallback: dir < 0 ? '.js-down' : '.js-up' });
+    rerender({ id: moved.id, selector, fallback: dir < 0 ? '.js-down' : '.js-up', anchor, flash: true });
+  }
+
+  /** На початок / в кінець списку — замість десятка натискань ↑. */
+  function moveTo(item, edge) {
+    const from = items.indexOf(item);
+    const to = edge === 'start' ? 0 : items.length - 1;
+    if (from < 0 || from === to) return;
+    items.splice(from, 1);
+    if (edge === 'start') items.unshift(item);
+    else items.push(item);
+    structural();
+    rerender({ id: item.id, selector: '.js-more', scroll: true, flash: true });
+    toast(edge === 'start' ? 'Переміщено на початок' : 'Переміщено в кінець', { type: 'info', key: 'list-move' });
+  }
+
+  async function moreActions(item) {
+    const index = items.indexOf(item);
+    if (index < 0) return;
+    const name = labelSub ? textOf(item[labelSub.key]).trim() : '';
+    const choice = await actionSheet({
+      title: name ? `«${name.length > 50 ? `${name.slice(0, 47)}…` : name}»` : `Елемент ${index + 1}`,
+      actions: [
+        { label: 'На початок', iconName: 'toTop', disabled: index === 0 },
+        { label: 'В кінець', iconName: 'toBottom', disabled: index === items.length - 1 },
+        { label: 'Дублювати', iconName: 'copy', disabled: items.length >= max, hint: items.length >= max ? `максимум ${max}` : '' },
+        { label: 'Видалити', iconName: 'trash', danger: true },
+      ],
+    });
+    const at = items.indexOf(item);
+    if (choice === null || at < 0) return;
+    if (choice === 0) moveTo(item, 'start');
+    else if (choice === 1) moveTo(item, 'end');
+    else if (choice === 2) duplicate(at);
+    else if (choice === 3) remove(at);
   }
 
   function duplicate(index) {
@@ -750,7 +890,7 @@ function listField(field, obj, path) {
     state.expanded.add(copy.id);
     structural();
     rerender({ id: copy.id, selector: '.item__toggle', scroll: true });
-    toast('Створено копію — вона нижче оригіналу');
+    toast('Створено копію — вона нижче оригіналу', { key: 'list-dup' });
   }
 
   async function remove(index) {
@@ -772,13 +912,25 @@ function listField(field, obj, path) {
     if (!neighbour) addBtn.focus();
     toast('Видалено', {
       type: 'info',
+      key: 'list-remove',
       action: {
         label: 'Повернути',
         onClick: () => {
-          if (items.length >= max || !root.isConnected) return;
+          // Список міг змінитися повністю (вихід, відновлення копії) — тоді повертати нікуди
+          if (getByPath(state.draft, path) !== items || items.includes(item)) return;
+          if (items.length >= max) {
+            toast(`Не вдалося повернути: у блоці вже максимум елементів (${max}).`, { type: 'error' });
+            return;
+          }
           items.splice(Math.min(at, items.length), 0, item);
-          structural();
-          rerender({ id: item.id, selector: '.item__toggle', scroll: true });
+          if (root.isConnected) {
+            structural();
+            rerender({ id: item.id, selector: '.item__toggle', scroll: true, flash: true });
+          } else {
+            // Сторінку тим часом перемалювали (збереження, перехід) — оновлюємо її
+            changed(path);
+            emit('draft-replaced');
+          }
         },
       },
     });
@@ -795,6 +947,14 @@ function listField(field, obj, path) {
 
   rerender();
   return root;
+}
+
+/** Коротка підсвітка переміщеного елемента, щоб було видно, куди він став. */
+export function flashMoved(el) {
+  el.classList.remove('is-moved');
+  void el.offsetWidth; // перезапуск анімації
+  el.classList.add('is-moved');
+  el.addEventListener('animationend', () => el.classList.remove('is-moved'), { once: true });
 }
 
 /* ---------------- збірка ---------------- */
@@ -851,15 +1011,20 @@ export function paintErrors(root) {
     const errEl = el.querySelector(':scope > .field__error');
     if (errEl) {
       errEl.hidden = !own;
+      if (!errEl.id) errEl.id = nextId('err');
       // «Невірний формат» з сервера доповнюємо зрозумілою підказкою
-      errEl.textContent = own && own === 'Невірний формат' && el.dataset.hint ? `Невірний формат. ${el.dataset.hint}` : (own || '');
+      errEl.textContent = own && /^(Невірний|Неправильний) формат\.?$/.test(own) && el.dataset.hint ? `${own.replace(/\.$/, '')}. ${el.dataset.hint}` : (own || '');
     }
     for (const input of el.querySelectorAll('input, textarea, select')) {
-      if (input.closest('[data-path]') === el) {
-        if (own) input.setAttribute('aria-invalid', 'true');
-        else input.removeAttribute('aria-invalid');
-      }
+      if (input.closest('[data-path]') !== el) continue;
+      if (own) input.setAttribute('aria-invalid', 'true');
+      else input.removeAttribute('aria-invalid');
+      // Текст помилки читається разом з полем (а підказку про формат, сховану на час помилки, — ні)
+      if (errEl) describedBy(input, errEl.id, Boolean(own));
+      for (const warnEl of el.querySelectorAll(':scope > .field__warn')) describedBy(input, warnEl.id, !own && !warnEl.hidden);
     }
+    const group = el.querySelector(':scope > .imgf__box');
+    if (group && errEl) describedBy(group, errEl.id, Boolean(own));
   }
 }
 

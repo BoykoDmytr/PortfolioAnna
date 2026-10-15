@@ -1,5 +1,5 @@
 <%
-  const brandLabel = [brand.name, brand.tagline].filter(Boolean).join(' ') || 'Home';
+  const brandLabel = kit.brandSpoken || 'Home';
 -%>
 <header class="site-header" data-header>
   <div class="site-header__inner">
@@ -30,7 +30,7 @@
 <% } -%>
 
     <div class="site-header__actions">
-<%- include('lang-switch', { kit, switchCls: 'lang-switch lang-switch--header' }) %>
+<%- include('lang-switch', { kit, switchCls: 'lang-switch lang-switch--header', switchNav: true }) %>
 <% if (kit.shownTypes.includes('contact') && u('navCta')) { -%>
       <a class="btn btn--sm btn--header" href="#contact"><%= u('navCta') %></a>
 <% } -%>
@@ -42,7 +42,7 @@
   </div>
 </header>
 
-<div class="mobile-menu" id="mobile-menu" data-mobile-menu hidden>
+<div class="mobile-menu" id="mobile-menu" data-mobile-menu role="dialog" aria-modal="true" aria-label="<%= kit.ui('menu') %>" hidden>
   <div class="mobile-menu__inner">
 <% if (kit.navItems.length) { -%>
     <nav aria-label="<%= kit.L.mainNav %>">
@@ -53,7 +53,7 @@
       </ol>
     </nav>
 <% } -%>
-    <div class="mobile-menu__foot">
+    <div class="mobile-menu__foot" role="group" aria-label="<%= kit.ui('contactMe') %>">
 <% if (kit.shownTypes.includes('contact') && u('navCta')) { -%>
       <a class="btn btn--primary btn--block" href="#contact"><%= u('navCta') %></a>
 <% } -%>

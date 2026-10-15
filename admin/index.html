@@ -25,7 +25,7 @@
   </div>
 
   <!-- Вхід -->
-  <section class="login" id="login" hidden aria-labelledby="login-title">
+  <main class="login" id="login" hidden aria-labelledby="login-title">
     <div class="login__card">
       <div class="login__brand">
         <img class="login__mark js-mark" src="../assets/img/monogram.svg" alt="" width="84" height="84">
@@ -37,17 +37,17 @@
         <div class="field">
           <div class="field__head"><label class="field__label" for="login-password">Пароль</label></div>
           <div class="input-wrap">
-            <input class="input input--lg" id="login-password" type="password" name="password" autocomplete="current-password" required>
+            <input class="input input--lg" id="login-password" type="password" name="password" autocomplete="current-password" autocapitalize="none" autocorrect="off" spellcheck="false" required>
             <button type="button" class="input-action" id="login-toggle" aria-label="Показати пароль" title="Показати пароль" aria-pressed="false"></button>
           </div>
           <p class="field__error" id="login-error" role="alert" hidden></p>
         </div>
         <button type="submit" class="btn btn--primary btn--lg btn--block" id="login-submit"><span class="btn__label">Увійти</span></button>
       </form>
-      <p class="login__help">Забули пароль? Як його скинути, описано в інструкції до сайту (файл README).</p>
+      <p class="login__help">Забули пароль? Попросіть людину, яка налаштовувала сайт, скинути його — це займає кілька хвилин.</p>
     </div>
     <a class="login__back" href="../">← На сайт</a>
-  </section>
+  </main>
 
   <!-- Адмін-панель -->
   <div class="app" id="app" hidden>
@@ -79,14 +79,14 @@
         <div class="savebar" id="savebar" data-state="clean">
           <p class="savebar__state" id="save-state" aria-live="polite"></p>
           <div class="savebar__actions">
-            <button type="button" class="btn btn--ghost btn--sm savebar__discard" id="discard-btn" hidden><span class="btn__label">Скасувати</span></button>
+            <button type="button" class="btn btn--ghost btn--sm savebar__discard" id="discard-btn" hidden><span class="btn__label">Відкинути зміни</span></button>
             <button type="button" class="btn btn--primary savebar__save" id="save-btn" disabled><span class="btn__label">Зберегти зміни</span></button>
           </div>
         </div>
         <button type="button" class="icon-btn topbar__logout" id="logout-btn" aria-label="Вийти з адмін-панелі" title="Вийти"></button>
       </header>
 
-      <div class="banner" id="pw-banner" role="note" hidden>
+      <div class="banner" id="pw-banner" role="region" aria-label="Нагадування про пароль" hidden>
         <p class="banner__text">Ви використовуєте стандартний пароль — змініть його в розділі «Безпека».</p>
         <a class="btn btn--secondary btn--sm" href="#/security"><span class="btn__label">Змінити пароль</span></a>
       </div>

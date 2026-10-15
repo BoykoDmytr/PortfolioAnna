@@ -121,7 +121,7 @@ class Notifier {
         next.telegramToken = token;
       }
     } else if (src.telegramToken !== undefined && typeof src.telegramToken !== 'string') {
-      errors.push({ field: 'telegramToken', message: 'Невірний токен' });
+      errors.push({ field: 'telegramToken', message: 'Неправильний токен' });
     }
 
     if (!errors.length && next.telegramEnabled) {
@@ -173,8 +173,8 @@ class Notifier {
     const token = typeof src.telegramToken === 'string' && src.telegramToken.trim() ? src.telegramToken.trim() : s.telegramToken;
     const chatId = typeof src.telegramChatId === 'string' && src.telegramChatId.trim() ? src.telegramChatId.trim() : s.telegramChatId;
     if (!token || !chatId) throw httpError(400, 'Спершу вкажіть токен бота і Chat ID.');
-    if (!TOKEN_RE.test(token)) throw httpError(400, 'Токен бота має невірний формат.');
-    if (!CHAT_ID_RE.test(chatId)) throw httpError(400, 'Chat ID має невірний формат.');
+    if (!TOKEN_RE.test(token)) throw httpError(400, 'Токен бота має неправильний формат.');
+    if (!CHAT_ID_RE.test(chatId)) throw httpError(400, 'Chat ID має неправильний формат.');
     await this.sendMessage(token, chatId, 'Тестове повідомлення з сайту ANNA FROLOVA TRAVEL. Сповіщення про нові заявки працюють!');
     return true;
   }

@@ -1,13 +1,16 @@
 <%
   const photo = img(s.image);
   const textParas = paras(s.text);
+  // Телефон, що вже є карткою «Зателефонувати», у деталях не повторюємо
+  const hasCallCard = messengers.some((m) => m.key === 'phone');
   const details = [
-    links.phone && { key: 'phone', icon: 'phone', label: kit.L.phone, value: links.phone.display, href: links.phone.href },
+    links.phone && !hasCallCard && { key: 'phone', icon: 'phone', label: kit.L.phone, value: links.phone.display, href: links.phone.href },
     links.email && { key: 'email', icon: 'mail', label: kit.L.email, value: links.email.display, href: links.email.href },
     t(contacts.city) && { key: 'city', icon: 'pin', label: kit.L.city, value: t(contacts.city) },
     t(contacts.hours) && { key: 'hours', icon: 'clock', label: kit.L.hours, value: t(contacts.hours) },
   ].filter(Boolean);
   const req = `<span class="field__req" aria-hidden="true">*</span><span class="visually-hidden"> (${kit.esc(kit.L.required)})</span>`;
+  const photoAlt = [brand.name, brand.tagline].filter(Boolean).join(' ');
   const okStatus = formEnabled && leadStatus === 'ok';
   const errStatus = formEnabled && leadStatus === 'error';
 -%>
@@ -16,15 +19,10 @@
     <div class="contact<%= formEnabled ? ' contact--with-form' : ' contact--no-form' %><%= photo ? ' contact--with-image' : '' %>">
 <% if (photo && !formEnabled) { -%>
       <div class="contact__visual" data-reveal>
-        <div class="arch arch--soft"><img class="arch__img" src="<%= photo %>" alt="<%= [brand.name, brand.tagline].filter(Boolean).join(' ') %>" loading="lazy" decoding="async"></div>
+        <div class="arch arch--soft"><img class="arch__img" src="<%= photo %>" alt="<%= photoAlt %>" loading="lazy" decoding="async"></div>
       </div>
 <% } -%>
-      <div class="contact__info<%= photo && formEnabled ? ' contact__info--badge' : '' %>">
-<% if (photo && formEnabled) { -%>
-        <div class="contact__badge" data-reveal>
-          <div class="arch"><img class="arch__img" src="<%= photo %>" alt="<%= [brand.name, brand.tagline].filter(Boolean).join(' ') %>" loading="lazy" decoding="async"></div>
-        </div>
-<% } -%>
+      <div class="contact__info">
 <%- include('../section-head', { s, id: 'contact', align: 'left' }) %>
 <% if (textParas.length) { -%>
         <div class="contact__text" data-reveal style="--d: 1">
@@ -34,7 +32,7 @@
         </div>
 <% } -%>
 <% if (t(s.note)) { -%>
-        <p class="contact__note" data-reveal style="--d: 1"><span class="pulse" aria-hidden="true"></span><%= t(s.note) %></p>
+        <p class="contact__note" data-reveal style="--d: 1"><span class="pulse" aria-hidden="true"></span><%= kit.typo(t(s.note)) %></p>
 <% } -%>
 <% if (messengers.length) { -%>
         <ul class="messengers messengers--<%= messengers.length %>" aria-label="<%= kit.L.messengers %>">
@@ -82,15 +80,19 @@
           <h3 class="form-card__title"><%= t(s.formTitle) %></h3>
 <% } -%>
           <form class="lead-form" action="<%= leadAction %>" method="post" accept-charset="utf-8" data-lead-form
-            data-msg-sending="<%= kit.ui('formSending') %>" data-msg-success="<%= kit.ui('formSuccess') %>" data-msg-error="<%= kit.ui('formError') %>">
+            data-msg-sending="<%= kit.ui('formSending') %>" data-msg-success="<%= kit.ui('formSuccess') %>" data-msg-error="<%= kit.ui('formError') %>"
+            data-msg-fields="<%= kit.L.errFields %>">
+            <p class="lead-form__required" aria-hidden="true"><%- kit.esc(kit.L.requiredNote).replace('*', '<span>*</span>') %></p>
             <div class="lead-form__grid">
               <div class="field">
                 <label class="field__label" for="lead-name"><%= kit.ui('formName') %><%- req %></label>
-                <input class="field__input" id="lead-name" name="name" type="text" required minlength="2" maxlength="80" autocomplete="name">
+                <input class="field__input" id="lead-name" name="name" type="text" required minlength="2" maxlength="80" autocomplete="name" data-msg-invalid="<%= kit.L.errName %>">
+                <p class="field__error" id="lead-name-error" data-field-error hidden></p>
               </div>
               <div class="field">
                 <label class="field__label" for="lead-contact"><%= kit.ui('formContact') %><%- req %></label>
-                <input class="field__input" id="lead-contact" name="contact" type="text" required minlength="3" maxlength="100" autocomplete="tel">
+                <input class="field__input" id="lead-contact" name="contact" type="text" required minlength="3" maxlength="100" autocomplete="tel" data-msg-invalid="<%= kit.L.errContact %>">
+                <p class="field__error" id="lead-contact-error" data-field-error hidden></p>
               </div>
               <div class="field field--wide">
                 <label class="field__label" for="lead-destination"><%= kit.ui('formDestination') %></label>
@@ -126,6 +128,9 @@
           </form>
 <% } -%>
         </div>
+<% if (photo) { -%>
+        <figure class="contact__photo"><img src="<%= photo %>" alt="<%= photoAlt %>" loading="lazy" decoding="async"></figure>
+<% } -%>
       </div>
 <% } -%>
     </div>

@@ -138,7 +138,8 @@ async function exportStatic(opts = {}) {
   const uploads = copyDir(uploadsDir, path.join(outDir, 'uploads'), (src) => MEDIA_EXT_RE.test(src));
   fs.writeFileSync(path.join(outDir, MARKER), '');
 
-  return { outDir, pages, assets, uploads, warnings: errors.length, basePath };
+  const siteUrl = content.seo && typeof content.seo.siteUrl === 'string' ? content.seo.siteUrl.trim() : '';
+  return { outDir, pages, assets, uploads, warnings: errors.length, basePath, siteUrl };
 }
 
 async function main() {
@@ -155,6 +156,15 @@ async function main() {
       '  У статичній версії форма заявки вимкнена — відвідувачі пишуть у месенджери або телефонують.',
       '  Цю папку можна безкоштовно опублікувати на GitHub Pages, Netlify або Cloudflare Pages.',
     ];
+    if (!result.siteUrl) {
+      lines.push(
+        '',
+        '  !!! УВАГА: не вказано «Адресу сайту» (адмінка → Налаштування → SEO та соцмережі).',
+        '  !!! Без неї посилання на сайт у Telegram, Viber і Facebook показуються без картинки,',
+        '  !!! а Google не бачить зв’язку між українською та англійською версіями.',
+        '  !!! Після публікації впишіть адресу (наприклад https://annafrolova.travel) і зробіть експорт ще раз.',
+      );
+    }
     if (!result.basePath) {
       lines.push(
         '',

@@ -6,12 +6,13 @@
  */
 
 const crypto = require('crypto');
-const { normalizeText } = require('./validate');
+const { normalizeText, charsAtLeast, charsAtMost } = require('./validate');
 const { readJsonFile, writeJsonAtomic, moveAside, isPlainObject } = require('./content-store');
 
 const MAX_LEADS = 5000;
 const LEAD_STATUSES = ['new', 'in_progress', 'done'];
 const LEAD_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+const MAX_NOTE = 1000;
 
 const FIELDS = [
   { key: 'name', min: 2, max: 80, required: true },
@@ -26,15 +27,23 @@ const MESSAGES = {
   uk: {
     invalid: 'Перевірте, будь ласка, поля форми.',
     required: { name: 'Вкажіть, як до вас звертатися.', contact: 'Залиште телефон або Telegram, щоб я могла з вами зв’язатися.' },
-    tooShort: (min) => `Занадто коротко: мінімум ${min} символи.`,
-    tooLong: (max) => `Занадто довго: максимум ${max} символів.`,
-    type: 'Невірне значення.',
+    tooShort: {
+      name: (min) => `Ім’я закоротке — ${charsAtLeast(min)}.`,
+      contact: (min) => `Вкажіть повний номер телефону або нік у Telegram (${charsAtLeast(min)}).`,
+      other: (min) => `Занадто коротко: ${charsAtLeast(min)}.`,
+    },
+    tooLong: (max) => `Задовгий текст — ${charsAtMost(max)}.`,
+    type: 'Неправильне значення.',
   },
   en: {
     invalid: 'Please check the form fields.',
     required: { name: 'Please tell me your name.', contact: 'Please leave a phone number or Telegram so I can reach you.' },
-    tooShort: (min) => `Too short: at least ${min} characters.`,
-    tooLong: (max) => `Too long: at most ${max} characters.`,
+    tooShort: {
+      name: (min) => `Name is too short — at least ${min} characters.`,
+      contact: () => 'Please enter a full phone number or Telegram username.',
+      other: (min) => `Too short — at least ${min} characters.`,
+    },
+    tooLong: (max) => `Too long — ${max} characters at most.`,
     type: 'Invalid value.',
   },
 };
@@ -70,7 +79,7 @@ function validateLead(body) {
     if (!value) {
       if (field.required) errors.push({ field: field.key, message: msg.required[field.key] });
     } else if (field.min && value.length < field.min) {
-      errors.push({ field: field.key, message: msg.tooShort(field.min) });
+      errors.push({ field: field.key, message: (msg.tooShort[field.key] || msg.tooShort.other)(field.min) });
     } else if (value.length > field.max) {
       errors.push({ field: field.key, message: msg.tooLong(field.max) });
     }
@@ -79,6 +88,18 @@ function validateLead(body) {
   lead.lang = lang;
   return { lead, errors, lang, message: msg.invalid };
 }
+
+/** Нотатка власниці до заявки → { value } | { error } */
+function validateLeadNote(raw) {
+  if (raw === null) return { value: '' };
+  if (typeof raw !== 'string') return { error: 'Нотатка має бути текстом.' };
+  const value = normalizeText(raw, true);
+  if (value.length > MAX_NOTE) return { error: `Задовга нотатка: ${charsAtMost(MAX_NOTE)}.` };
+  return { value };
+}
+
+/** Заявки, збережені до появи нотаток, отримують порожню нотатку. */
+const withNote = (lead) => (typeof lead.note === 'string' ? lead : { ...lead, note: '' });
 
 class LeadStore {
   constructor({ leadsFile, logger = console }) {
@@ -97,7 +118,7 @@ class LeadStore {
       moveAside(this.leadsFile, this.logger);
       this.leads = [];
     } else {
-      this.leads = result.value.filter((l) => isPlainObject(l) && typeof l.id === 'string');
+      this.leads = result.value.filter((l) => isPlainObject(l) && typeof l.id === 'string').map(withNote);
     }
     return this.leads;
   }
@@ -123,6 +144,7 @@ class LeadStore {
       message: data.message || '',
       lang: data.lang === 'en' ? 'en' : 'uk',
       status: 'new',
+      note: '',
     };
     leads.unshift(lead);
     if (leads.length > MAX_LEADS) leads.length = MAX_LEADS;
@@ -135,14 +157,23 @@ class LeadStore {
     return this.load().find((l) => l.id === id) || null;
   }
 
-  /** → оновлена заявка або null, якщо не знайдено */
-  async setStatus(id, status) {
+  /**
+   * Змінює статус і/або нотатку: update(id, { status, note }).
+   * → оновлена заявка або null, якщо не знайдено
+   */
+  async update(id, { status, note } = {}) {
     const lead = this.find(id);
     if (!lead) return null;
-    lead.status = status;
+    if (status !== undefined) lead.status = status;
+    if (note !== undefined) lead.note = note;
     lead.updatedAt = new Date().toISOString();
     await this.persist();
     return lead;
+  }
+
+  /** → оновлена заявка або null, якщо не знайдено */
+  setStatus(id, status) {
+    return this.update(id, { status });
   }
 
   /** → true, якщо видалено */
@@ -156,4 +187,4 @@ class LeadStore {
   }
 }
 
-module.exports = { LeadStore, validateLead, leadLang, LEAD_STATUSES, MAX_LEADS };
+module.exports = { LeadStore, validateLead, validateLeadNote, leadLang, LEAD_STATUSES, MAX_LEADS, MAX_NOTE };

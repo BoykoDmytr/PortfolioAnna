@@ -79,7 +79,7 @@ const SECTIONS = [
       { key: 'primaryCta', type: 'text', label: 'Головна кнопка', help: 'Веде до форми заявки', max: 40 },
       { key: 'secondaryCta', type: 'text', label: 'Друга кнопка', help: 'Веде до напрямків', max: 40 },
       { key: 'image', type: 'image', label: 'Фонове фото', help: 'Горизонтальне фото, бажано від 2000 px завширшки', required: true },
-      { key: 'overlay', type: 'number', label: 'Затемнення фото, %', help: 'Щоб текст краще читався', min: 0, max: 80, default: 30 },
+      { key: 'overlay', type: 'number', label: 'Затемнення фото, %', help: 'Текст завжди лишається читабельним; більше значення — темніше фото', min: 0, max: 80, default: 30 },
     ],
   },
   {
@@ -90,6 +90,7 @@ const SECTIONS = [
       ...HEADING,
       { key: 'text', type: 'textarea', label: 'Текст про себе', help: 'Абзаци розділяйте порожнім рядком', max: 3000 },
       { key: 'photo', type: 'image', label: 'Ваше фото' },
+      { key: 'photoAlt', type: 'text', label: 'Опис фото (для незрячих)', help: 'Що на фото — читають програми екранного доступу. Наприклад: Анна Фролова, тревел-експертка', max: 120 },
       { key: 'signature', type: 'string', label: 'Підпис', help: 'Наприклад: Anna Frolova', max: 60 },
       {
         key: 'stats', type: 'list', label: 'Цифри', itemLabel: 'value', max: 4,
@@ -129,7 +130,7 @@ const SECTIONS = [
         item: [
           { key: 'image', type: 'image', label: 'Фото' },
           { key: 'name', type: 'text', label: 'Назва', max: 60 },
-          { key: 'tag', type: 'text', label: 'Тип відпочинку', help: 'Наприклад: Пляжний відпочинок', max: 40 },
+          { key: 'tag', type: 'text', label: 'Тип відпочинку', help: 'Коротко, до ~16 символів (напр.: Гірські лижі) — довший обріжеться трикрапкою', max: 40 },
           { key: 'text', type: 'textarea', label: 'Опис', max: 400 },
           { key: 'price', type: 'text', label: 'Ціна', help: 'Необов’язково. Наприклад: від $850', max: 40 },
         ],
@@ -160,7 +161,7 @@ const SECTIONS = [
       ...HEADING,
       SUBTITLE,
       {
-        key: 'items', type: 'list', label: 'Фото', itemLabel: 'caption', max: 24,
+        key: 'items', type: 'list', label: 'Фото', itemLabel: 'caption', max: 24, help: 'Фото 1, 5 і 7 показуються великими',
         item: [
           { key: 'image', type: 'image', label: 'Фото', required: true },
           { key: 'caption', type: 'text', label: 'Підпис', max: 80 },
@@ -230,7 +231,7 @@ const SECTIONS = [
       { key: 'note', type: 'text', label: 'Примітка', help: 'Наприклад: Відповідаю протягом години', max: 120 },
       { key: 'formEnabled', type: 'boolean', label: 'Показувати форму заявки', default: true },
       { key: 'formTitle', type: 'text', label: 'Заголовок форми', max: 80 },
-      { key: 'image', type: 'image', label: 'Фото біля контактів', help: 'Необов’язково' },
+      { key: 'image', type: 'image', label: 'Фото біля контактів', help: 'Необов’язково. Показується під формою заявки (на телефоні не показується) або поруч із контактами, якщо форму вимкнено' },
     ],
   },
 ];
@@ -288,8 +289,8 @@ const GROUPS = [
     title: 'SEO та соцмережі',
     description: 'Як сайт виглядає в Google і коли ним діляться в месенджерах.',
     fields: [
-      { key: 'title', type: 'text', label: 'Заголовок сторінки', help: 'До 60 символів', max: 80 },
-      { key: 'description', type: 'textarea', label: 'Опис', help: 'До 160 символів', max: 300 },
+      { key: 'title', type: 'text', label: 'Заголовок сторінки', help: 'Бажано до 60 символів — довший Google обріже', max: 80, recommended: 60 },
+      { key: 'description', type: 'textarea', label: 'Опис', help: 'Бажано до 160 символів — довший Google обріже', max: 300, recommended: 160 },
       { key: 'ogImage', type: 'image', label: 'Картинка для поширення', help: '1200×630 px' },
       { key: 'siteUrl', type: 'string', label: 'Адреса сайту', help: 'Заповніть після публікації, наприклад https://annafrolova.travel', pattern: PATTERNS.url, max: 120 },
     ],
@@ -315,11 +316,11 @@ const GROUPS = [
       { key: 'writeViber', type: 'text', label: 'Кнопка Viber', max: 40 },
       { key: 'writeInstagram', type: 'text', label: 'Кнопка Instagram', max: 40 },
       { key: 'call', type: 'text', label: 'Кнопка «Зателефонувати»', max: 40 },
-      { key: 'contactMe', type: 'text', label: 'Плаваюча кнопка (підказка)', max: 40 },
+      { key: 'contactMe', type: 'text', label: 'Плаваюча кнопка та посилання в розділі «Питання»', max: 40 },
       { key: 'menu', type: 'text', label: 'Меню (для мобільних)', max: 30 },
       { key: 'close', type: 'text', label: 'Закрити', max: 30 },
-      { key: 'prev', type: 'text', label: 'Попередній', max: 30 },
-      { key: 'next', type: 'text', label: 'Наступний', max: 30 },
+      { key: 'prev', type: 'text', label: 'Кнопка «Попередній відгук»', help: 'Підказка для програм екранного доступу в каруселі відгуків', max: 30 },
+      { key: 'next', type: 'text', label: 'Кнопка «Наступний відгук»', help: 'Підказка для програм екранного доступу в каруселі відгуків', max: 30 },
       { key: 'backToTop', type: 'text', label: 'Нагору', max: 30 },
       { key: 'rights', type: 'text', label: 'Права захищено', max: 60 },
     ],

@@ -3,14 +3,14 @@
   <div class="lightbox__stage" data-lightbox-stage>
     <figure class="lightbox__figure">
       <img class="lightbox__img" data-lightbox-img src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" alt="">
-      <figcaption class="lightbox__caption">
+      <figcaption class="lightbox__caption" aria-live="polite">
         <span class="lightbox__counter" data-lightbox-counter></span>
         <span data-lightbox-caption></span>
       </figcaption>
     </figure>
   </div>
-  <button class="round-btn round-btn--light lightbox__btn lightbox__btn--prev" type="button" data-lightbox-prev aria-label="<%= kit.ui('prev') %>"><%- icon('arrow-left') %></button>
-  <button class="round-btn round-btn--light lightbox__btn lightbox__btn--next" type="button" data-lightbox-next aria-label="<%= kit.ui('next') %>"><%- icon('arrow-right') %></button>
+  <button class="round-btn round-btn--light lightbox__btn lightbox__btn--prev" type="button" data-lightbox-prev aria-label="<%= kit.L.prevPhoto %>"><%- icon('arrow-left') %></button>
+  <button class="round-btn round-btn--light lightbox__btn lightbox__btn--next" type="button" data-lightbox-next aria-label="<%= kit.L.nextPhoto %>"><%- icon('arrow-right') %></button>
   <button class="round-btn round-btn--light lightbox__close" type="button" data-lightbox-close aria-label="<%= kit.ui('close') %>"><%- icon('close') %></button>
 </dialog>
 <% } -%>

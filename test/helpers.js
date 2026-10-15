@@ -13,6 +13,9 @@ const { createApp } = require('../src/app');
 const ROOT_DIR = path.resolve(__dirname, '..');
 const SEED_DATA_DIR = path.join(ROOT_DIR, 'data');
 const TEST_PASSWORD = 'test-password-123';
+// Дешевий scrypt, щоб тести не чекали ~0,3 с на кожен вхід. Справжні параметри перевіряє
+// окремий тест (startServer({ scryptParams: null }) і тести класу Auth).
+const FAST_SCRYPT = Object.freeze({ N: 1024, r: 8, p: 1 });
 const HAS_INDEX_VIEW = fs.existsSync(path.join(ROOT_DIR, 'views', 'index.ejs'));
 const HAS_404_VIEW = fs.existsSync(path.join(ROOT_DIR, 'views', '404.ejs'));
 const HAS_SEED_CONTENT = fs.existsSync(path.join(SEED_DATA_DIR, 'content.json'));
@@ -41,7 +44,7 @@ function createLogger() {
 async function startServer(options = {}) {
   const { root, dataDir } = makeTempDataDir();
   const logger = createLogger();
-  const app = createApp({ dataDir, adminPassword: TEST_PASSWORD, logger, ...options });
+  const app = createApp({ dataDir, adminPassword: TEST_PASSWORD, logger, scryptParams: FAST_SCRYPT, ...options });
   const server = await new Promise((resolve, reject) => {
     const s = app.listen(0, '127.0.0.1', () => resolve(s));
     s.on('error', reject);
@@ -121,6 +124,7 @@ module.exports = {
   ROOT_DIR,
   SEED_DATA_DIR,
   TEST_PASSWORD,
+  FAST_SCRYPT,
   HAS_INDEX_VIEW,
   HAS_404_VIEW,
   HAS_SEED_CONTENT,

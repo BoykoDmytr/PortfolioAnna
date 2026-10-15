@@ -5,17 +5,18 @@
  * Усі зміни контенту накопичуються в одній чернетці і зберігаються кнопкою «Зберегти зміни» (або Ctrl/Cmd+S).
  */
 
-import { h } from './dom.js';
+import { h, plural, formatDate } from './dom.js';
 import { icon } from './icons.js';
 import { api, setReauthHandler } from './api.js';
 import {
-  state, on, emit, setContent, computeDirty, readStoredDraft, forgetStoredDraft,
+  state, on, emit, setContent, computeDirty, readStoredDraft, forgetStoredDraft, flushDraft, syncInto,
   setErrors, expandForPath, routeForPath, isPageDirty, pageHasErrors, sectionDef, groupDef, newLeadsCount,
+  mergeContent, rebaseDraft, unitLabel, uploadsInFlight, uploadsSettled,
 } from './state.js';
-import { toast, confirmDialog } from './ui.js';
+import { toast, confirmDialog, openModal } from './ui.js';
 import { paintErrors, focusPath, autosizeAll } from './fields.js';
 import { renderStructure, renderSection, renderGroup } from './pages/content.js';
-import { renderLeadsPage, loadLeads } from './pages/leads.js';
+import { renderLeadsPage, loadLeads, flushLeadRemovals } from './pages/leads.js';
 import { renderMediaPage } from './media.js';
 import { renderSecurityPage } from './pages/security.js';
 import { renderBackupsPage } from './pages/backups.js';
@@ -117,7 +118,8 @@ function restoreFocus(info) {
 }
 
 function renderRoute({ preserve = false } = {}) {
-  if (!state.schema) return;
+  // Після виходу (чернетки вже немає) кнопка «Назад» у браузері нічого не малює
+  if (!state.schema || !state.draft || el.app.hidden) return;
   route = parseRoute();
   const scrollY = window.scrollY;
   const focusInfo = preserve ? captureFocus() : null;
@@ -178,13 +180,13 @@ function marker(r) {
   return null;
 }
 
-function navLink(r, label, { iconNode, extra, className } = {}) {
+function navLink(r, label, { iconNode, extra, className, srAfter } = {}) {
   const active = sameRoute(r, route);
   return h('a', {
     class: ['nav-link', className, active && 'is-active'],
     href: routeHash(r),
     'aria-current': active ? 'page' : undefined,
-  }, iconNode, h('span', { class: 'nav-link__label', text: label }), extra, marker(r));
+  }, iconNode, h('span', { class: 'nav-link__label', text: label }), srAfter && h('span', { class: 'sr-only', text: srAfter }), extra, marker(r));
 }
 
 function renderNav() {
@@ -193,15 +195,25 @@ function renderNav() {
     const def = sectionDef(type);
     const data = state.draft.sections[type];
     if (!def || !data) return null;
-    const dot = h('span', { class: ['vis-dot', data.enabled ? 'is-on' : 'is-off'], title: data.enabled ? 'Показується на сайті' : 'Приховано' },
-      h('span', { class: 'sr-only', text: data.enabled ? 'показується' : 'приховано' }));
-    return h('li', null, navLink({ name: 'section', param: type }, def.title, { iconNode: dot, className: ['nav-link--sub', !data.enabled && 'is-muted'].filter(Boolean).join(' ') }));
+    const dot = h('span', { class: ['vis-dot', data.enabled ? 'is-on' : 'is-off'], title: data.enabled ? 'Показується на сайті' : 'Приховано', 'aria-hidden': 'true' });
+    return h('li', null, navLink({ name: 'section', param: type }, def.title, {
+      iconNode: dot,
+      srAfter: data.enabled ? ' (показується)' : ' (приховано)',
+      className: ['nav-link--sub', !data.enabled && 'is-muted'].filter(Boolean).join(' '),
+    }));
   });
 
   const newCount = newLeadsCount();
-  const leadsBadge = newCount ? h('span', { class: 'nav-badge', title: 'Нові заявки', text: String(newCount) }, h('span', { class: 'sr-only', text: ' нових' })) : null;
+  const leadsBadge = newCount
+    ? h('span', { class: 'nav-badge', title: 'Нові заявки' },
+      h('span', { 'aria-hidden': 'true', text: String(newCount) }),
+      h('span', { class: 'sr-only', text: `: ${newCount} ${plural(newCount, ['нова заявка', 'нові заявки', 'нових заявок'])}` }))
+    : null;
 
   el.nav.replaceChildren(
+    // «Заявки» — найчастіша щоденна дія, тому вгорі: на телефоні її видно без прокручування меню
+    h('div', { class: 'nav-group nav-group--top' },
+      navLink({ name: 'leads' }, 'Заявки', { iconNode: icon('inbox'), extra: leadsBadge })),
     h('div', { class: 'nav-group' },
       h('p', { class: 'nav-group__title', text: 'Сторінка' }),
       navLink({ name: 'structure' }, 'Структура сторінки', { iconNode: icon('layers') }),
@@ -211,7 +223,6 @@ function renderNav() {
       state.schema.groups.map((g) => navLink({ name: 'group', param: g.key }, g.title, { iconNode: icon(GROUP_ICONS[g.key] || 'file') }))),
     h('div', { class: 'nav-group' },
       h('p', { class: 'nav-group__title', text: 'Керування' }),
-      navLink({ name: 'leads' }, 'Заявки', { iconNode: icon('inbox'), extra: leadsBadge }),
       navLink({ name: 'media' }, 'Медіатека', { iconNode: icon('images') }),
       navLink({ name: 'security' }, 'Безпека', { iconNode: icon('lock') }),
       navLink({ name: 'backups' }, 'Резервні копії', { iconNode: icon('history') })),
@@ -219,6 +230,9 @@ function renderNav() {
 
   const menuDot = state.dirty || newCount;
   el.menuBtn.classList.toggle('has-dot', Boolean(menuDot));
+  el.menuBtn.setAttribute('aria-label', newCount
+    ? `Відкрити меню (${newCount} ${plural(newCount, ['нова заявка', 'нові заявки', 'нових заявок'])})`
+    : 'Відкрити меню');
 }
 
 /* ---------------- мобільне меню ---------------- */
@@ -249,54 +263,142 @@ function closeDrawer({ restoreFocus: refocus = true } = {}) {
    Збереження
    ========================================================================= */
 
+let lastSaveMode = '';
+
 function updateSaveUi() {
   const dirty = state.dirty;
   const hasErrors = state.errors.size > 0;
   let mode = 'clean';
-  if (state.saving) mode = 'saving';
+  if (state.saving) mode = uploadsInFlight() ? 'waiting' : 'saving';
   else if (dirty && hasErrors) mode = 'error';
   else if (dirty) mode = 'dirty';
-  el.savebar.dataset.state = mode;
+  el.savebar.dataset.state = mode === 'waiting' ? 'saving' : mode;
   document.documentElement.classList.toggle('is-dirty', dirty || state.saving);
+  el.saveBtn.disabled = !dirty || state.saving;
+  el.discardBtn.hidden = !dirty || state.saving;
+  // Текст (і живий регіон для екранних читачів) оновлюємо лише при зміні стану — а не на кожну літеру
+  if (mode === lastSaveMode) return;
+  lastSaveMode = mode;
 
   const texts = {
     clean: 'Усі зміни збережено',
     dirty: 'Є незбережені зміни',
     error: 'Перевірте виділені поля',
     saving: 'Зберігаємо…',
+    waiting: 'Чекаємо, доки завантажиться фото…',
   };
   el.saveState.replaceChildren(icon(mode === 'clean' ? 'check' : mode === 'error' ? 'alert' : 'edit'), h('span', { text: texts[mode] }));
-  el.saveBtn.disabled = !dirty || state.saving;
   el.saveBtn.classList.toggle('is-busy', state.saving);
-  el.saveBtn.querySelector('.btn__label').textContent = state.saving ? 'Зберігаємо…' : 'Зберегти зміни';
-  el.discardBtn.hidden = !dirty || state.saving;
+  el.saveBtn.querySelector('.btn__label').textContent = mode === 'waiting' ? 'Чекаємо на фото…' : state.saving ? 'Зберігаємо…' : 'Зберегти зміни';
 }
 
-async function save() {
-  if (state.saving || !state.draft) return;
+/**
+ * Перед збереженням перевіряємо, чи сайт не змінили тим часом з іншого пристрою чи вкладки.
+ * Інакше збереження «повної копії» мовчки затерло б ті зміни.
+ * → true — можна зберігати (чернетку вже поєднано з новою версією), false — Анна передумала
+ */
+async function reconcileWithServer(server) {
+  const { conflicts } = mergeContent(state.saved, state.draft, server);
+  let choice = 'merged';
+  if (conflicts.length) {
+    choice = await askConflict(conflicts);
+    if (choice === null) return null;
+  }
+  rebaseDraft(server, { keepMine: choice !== 'theirs' });
+  if (CONTENT_PAGES.has(route.name)) renderRoute({ preserve: true });
+  else renderNav();
+  return choice;
+}
+
+function askConflict(conflicts) {
+  const modal = openModal({
+    title: 'Сайт змінили на іншому пристрої',
+    description: 'Поки ви редагували, хтось зберіг зміни (можливо, ви — з телефона чи іншої вкладки). Решту змін ми поєднаємо автоматично, а ці розділи змінено і там, і тут:',
+    size: 'sm',
+    className: 'modal--confirm',
+  });
+  modal.body.append(h('ul', { class: 'modal__list' }, conflicts.map((key) => h('li', { text: unitLabel(key) }))));
+  const mine = h('button', { type: 'button', class: 'btn btn--primary', text: 'Зберегти мою версію', onClick: () => modal.close('mine') });
+  const theirs = h('button', { type: 'button', class: 'btn btn--secondary', text: 'Залишити версію з сайту', onClick: () => modal.close('theirs') });
+  modal.footer.append(theirs, mine);
+  return modal.closed.then((v) => (v === 'mine' || v === 'theirs' ? v : null));
+}
+
+let saveRun = null;
+
+/** → Promise<boolean>: true, якщо все збережено */
+function save() {
+  if (!saveRun) saveRun = doSave().finally(() => { saveRun = null; });
+  return saveRun;
+}
+
+async function doSave() {
+  if (!state.draft) return false;
+  if (state.saving) {
+    // Сайт саме оновлюється з іншої дії (наприклад, видалення фото з медіатеки)
+    toast('Зачекайте секунду й натисніть «Зберегти» ще раз.', { type: 'info', key: 'save' });
+    return false;
+  }
+  if (uploadsInFlight()) {
+    // Фото ще завантажується — дочекаємося, щоб воно не загубилося
+    state.saving = true;
+    updateSaveUi();
+    await uploadsSettled();
+    state.saving = false;
+  }
   if (!computeDirty()) {
-    toast('Змін немає — усе вже збережено', { type: 'info' });
-    return;
+    updateSaveUi();
+    toast('Змін немає — усе вже збережено', { type: 'info', key: 'save' });
+    return true;
   }
   state.saving = true;
   updateSaveUi();
-  const sent = JSON.stringify(state.draft);
+  let merged = false;
   try {
-    const res = await api.put('content', JSON.parse(sent));
+    const server = await api.get('content', { onHeaders: rememberRevision });
+    if (JSON.stringify(server) !== state.savedJson) {
+      const choice = await reconcileWithServer(server);
+      if (!choice) return false;
+      merged = true;
+      if (!computeDirty()) {
+        toast(choice === 'theirs'
+          ? 'Залишено версію з сайту. Інших змін для збереження немає.'
+          : 'Сайт уже містить ці зміни — зберігати нічого.', { type: 'info', key: 'save' });
+        return true;
+      }
+    }
+    const sent = JSON.stringify(state.draft);
+    const res = await api.put('content', JSON.parse(sent), {
+      headers: state.revision ? { 'If-Match': state.revision } : undefined,
+      onHeaders: rememberRevision,
+    });
     const editedMeanwhile = JSON.stringify(state.draft) !== sent;
     state.errors.clear();
     if (editedMeanwhile || JSON.stringify(res.content) === sent) {
       setContent(res.content, { keepDraft: true });
     } else {
-      // Сервер дещо нормалізував (пробіли, @ у нікнеймі…) — показуємо остаточний вигляд
+      // Сервер дещо нормалізував (пробіли, @ у нікнеймі…) — показуємо остаточний вигляд.
+      // Чернетка оновлюється «на місці», тож незавершені дії (завантаження фото) не загубляться.
       setContent(res.content);
       renderRoute({ preserve: true });
     }
     emit('errors');
-    toast(editedMeanwhile ? 'Збережено. Останні правки ще не збережені — натисніть «Зберегти» ще раз.' : 'Збережено — зміни вже на сайті', { type: editedMeanwhile ? 'info' : 'success' });
+    let message = 'Збережено — зміни вже на сайті';
+    if (editedMeanwhile) message = 'Збережено. Останні правки ще не збережені — натисніть «Зберегти» ще раз.';
+    else if (merged) message = 'Збережено. Зміни, зроблені тим часом на іншому пристрої, теж на місці.';
+    toast(message, { type: editedMeanwhile ? 'info' : 'success', key: 'save' });
+    return true;
   } catch (err) {
-    if (err.status === 422 && err.details.length) showValidationErrors(err);
-    else toast(err.message, { type: 'error' });
+    if (err.status === 409 || err.status === 412) {
+      // Сервер сам помітив, що сайт змінили деінде: наступне натискання «Зберегти» поєднає зміни
+      state.revision = '';
+      toast('Сайт щойно змінили на іншому пристрої. Натисніть «Зберегти» ще раз — ми поєднаємо зміни.', { type: 'info', key: 'save' });
+    } else if (err.status === 422 && err.details.length) {
+      showValidationErrors(err);
+    } else {
+      toast(err.message, { type: 'error', key: 'save' });
+    }
+    return false;
   } finally {
     state.saving = false;
     computeDirty();
@@ -304,12 +406,17 @@ async function save() {
   }
 }
 
+function rememberRevision(headers) {
+  const rev = headers && headers.get('X-Content-Revision');
+  if (rev) state.revision = rev;
+}
+
 function showValidationErrors(err) {
   setErrors(err.details);
   for (const d of err.details) expandForPath(d.path);
   const first = err.details.find((d) => routeForPath(d.path)) || err.details[0];
   const n = err.details.length;
-  toast(`${err.message}: ${n} ${n === 1 ? 'поле потребує' : n < 5 ? 'поля потребують' : 'полів потребують'} уваги.`, { type: 'error' });
+  toast(`${err.message}: ${n} ${n === 1 ? 'поле потребує' : n < 5 ? 'поля потребують' : 'полів потребують'} уваги.`, { type: 'error', key: 'save' });
   const target = routeForPath(first.path);
   pendingFocusPath = first.path;
   if (target && !sameRoute(target, route)) {
@@ -322,9 +429,9 @@ function showValidationErrors(err) {
 async function discard() {
   if (!state.dirty) return;
   const ok = await confirmDialog({
-    title: 'Скасувати всі незбережені зміни?',
-    message: 'Сайт залишиться таким, яким був після останнього збереження. Скасувати це буде неможливо.',
-    confirmLabel: 'Скасувати зміни',
+    title: 'Відкинути всі незбережені зміни?',
+    message: 'Сайт залишиться таким, яким був після останнього збереження. Відкинуті зміни повернути буде неможливо.',
+    confirmLabel: 'Відкинути зміни',
     cancelLabel: 'Ні, повернутися',
     danger: true,
   });
@@ -334,7 +441,44 @@ async function discard() {
   forgetStoredDraft();
   emit('errors');
   renderRoute({ preserve: true });
-  toast('Зміни скасовано', { type: 'info' });
+  toast('Зміни відкинуто', { type: 'info', key: 'save' });
+}
+
+/* ---------------- «Відкрити сайт», коли є незбережені зміни ---------------- */
+
+async function openSite(href) {
+  const modal = openModal({
+    title: 'Зміни ще не на сайті',
+    description: 'На сайті поки що попередня версія: ваші останні правки з’являться там після збереження.',
+    size: 'sm',
+    className: 'modal--confirm',
+  });
+  const saveOpen = h('button', { type: 'button', class: 'btn btn--primary', text: 'Зберегти й відкрити', onClick: () => modal.close('save') });
+  const plainOpen = h('button', { type: 'button', class: 'btn btn--secondary', text: 'Відкрити без змін', onClick: () => modal.close('open') });
+  modal.footer.append(plainOpen, saveOpen);
+  // Вкладку відкриваємо одразу після натискання — інакше браузер заблокує її як спливаюче вікно
+  const choice = await new Promise((resolve) => {
+    saveOpen.addEventListener('click', () => resolve({ action: 'save', win: window.open('about:blank', '_blank') }), { once: true });
+    plainOpen.addEventListener('click', () => resolve({ action: 'open' }), { once: true });
+    modal.closed.then(() => resolve(null));
+  });
+  if (!choice) return;
+  if (choice.action === 'open') {
+    window.open(href, '_blank', 'noopener');
+    return;
+  }
+  const { win } = choice;
+  if (win) {
+    try {
+      win.opener = null;
+    } catch {
+      // ignore
+    }
+  }
+  const ok = await save();
+  if (ok && win && !win.closed) win.location.href = href;
+  else if (ok) window.open(href, '_blank', 'noopener');
+  else if (win && !win.closed) win.close();
 }
 
 /* =========================================================================
@@ -354,18 +498,23 @@ function showLogin({ notice = '', noticeType = 'info' } = {}) {
   el.boot.hidden = true;
   el.login.hidden = false;
   el.login.classList.toggle('login--overlay', Boolean(reauth));
+  // Під екраном повторного входу адмінка недоступна (фокус і екранні читачі не «провалюються» під нього)
+  el.app.inert = Boolean(reauth);
   el.loginNotice.hidden = !notice;
   el.loginNotice.textContent = notice;
   el.loginNotice.dataset.type = noticeType;
+  el.loginNotice.removeAttribute('role');
   el.loginError.hidden = true;
   el.loginPassword.value = '';
   el.loginPassword.removeAttribute('aria-invalid');
+  el.loginPassword.removeAttribute('aria-describedby');
   setTimeout(() => el.loginPassword.focus(), 50);
 }
 
 function hideLogin() {
   el.login.hidden = true;
   el.login.classList.remove('login--overlay');
+  el.app.inert = false;
 }
 
 function requestReauth() {
@@ -392,12 +541,19 @@ async function onLoginSubmit(e) {
     el.loginError.hidden = false;
     el.loginError.textContent = msg;
     el.loginPassword.setAttribute('aria-invalid', 'true');
+    el.loginPassword.setAttribute('aria-describedby', 'login-error');
     el.loginPassword.focus();
     el.loginPassword.select();
   };
   if (!password) {
     fail('Введіть пароль');
     return;
+  }
+  if (el.loginNotice.dataset.type === 'warn') {
+    // Попереднє пояснення («стандартний пароль з телефона») більше не стосується нової спроби
+    el.loginNotice.hidden = true;
+    el.loginNotice.removeAttribute('role');
+    el.loginPassword.removeAttribute('aria-describedby');
   }
   el.loginSubmit.disabled = true;
   el.loginSubmit.classList.add('is-busy');
@@ -418,7 +574,23 @@ async function onLoginSubmit(e) {
       await enterApp();
     }
   } catch (err) {
-    fail(err.message);
+    // Стандартний пароль з іншого пристрою: це не помилка в паролі, а інструкція, що робити далі
+    if (err.data && err.data.reason === 'default-password') {
+      el.loginError.hidden = true;
+      el.loginPassword.removeAttribute('aria-invalid');
+      el.loginPassword.setAttribute('aria-describedby', 'login-notice');
+      el.loginNotice.hidden = false;
+      el.loginNotice.textContent = err.message;
+      el.loginNotice.dataset.type = 'warn';
+      el.loginNotice.setAttribute('role', 'alert');
+      return;
+    }
+    // Якщо сервер повідомляє, скільки спроб лишилося, — попереджаємо до блокування
+    const left = Number.isInteger(err.data.attemptsLeft) ? err.data.attemptsLeft : null;
+    const base = err.message.replace(/\.$/, '');
+    fail(left !== null && left > 0 && left <= 3
+      ? `${base}. ${left === 1 ? 'Залишилася' : 'Залишилося'} ${left} ${plural(left, ['спроба', 'спроби', 'спроб'])} — далі вхід заблокується на 10 хвилин.`
+      : err.message);
   } finally {
     el.loginSubmit.disabled = false;
     el.loginSubmit.classList.remove('is-busy');
@@ -426,7 +598,7 @@ async function onLoginSubmit(e) {
   }
 }
 
-async function logout() {
+async function logout({ everywhere = false } = {}) {
   if (computeDirty()) {
     const ok = await confirmDialog({
       title: 'Вийти без збереження?',
@@ -437,10 +609,21 @@ async function logout() {
     });
     if (!ok) return;
   }
-  try {
-    await api.post('logout', undefined, { auth: false });
-  } catch {
-    // навіть якщо сервер недоступний — повертаємося на екран входу
+  await flushLeadRemovals(); // заявки, видалені щойно (з можливістю «Повернути»), видаляємо остаточно
+  if (everywhere) {
+    // Тут не можна «вдавати» успіх: якщо сервер не відповів, інші пристрої лишаються в системі
+    try {
+      await api.post('logout', { everywhere: true }, { auth: false });
+    } catch (err) {
+      toast(`Не вдалося вийти на всіх пристроях: ${err.message}`, { type: 'error', key: 'logout' });
+      return;
+    }
+  } else {
+    try {
+      await api.post('logout', undefined, { auth: false });
+    } catch {
+      // навіть якщо сервер недоступний — повертаємося на екран входу
+    }
   }
   clearInterval(pollTimer);
   forgetStoredDraft();
@@ -453,10 +636,11 @@ async function logout() {
   state.media = null;
   state.leads = [];
   state.leadsLoaded = false;
+  state.revision = '';
   el.app.hidden = true;
   closeDrawer({ restoreFocus: false });
   document.documentElement.classList.remove('is-dirty');
-  showLogin({ notice: 'Ви вийшли з адмін-панелі.' });
+  showLogin({ notice: everywhere ? 'Ви вийшли на всіх пристроях. Щоб продовжити тут, увійдіть знову.' : 'Ви вийшли з адмін-панелі.' });
 }
 
 function updateBanner() {
@@ -470,23 +654,13 @@ function updateBanner() {
 async function enterApp() {
   showBoot('Завантажуємо дані сайту…');
   try {
-    const [schema, content, icons] = await Promise.all([api.get('schema'), api.get('content'), api.get('icons')]);
+    const [schema, content, icons] = await Promise.all([api.get('schema'), api.get('content', { onHeaders: rememberRevision }), api.get('icons')]);
     state.schema = schema;
     state.icons = icons || {};
     state.errors.clear();
     const stored = readStoredDraft();
     setContent(content);
-    // Відновлюємо чернетку, лише якщо сайт відтоді не змінювали (інакше могли б затерти новіші зміни)
-    if (stored && stored.base === state.savedJson) {
-      state.draft = stored.draft;
-      if (computeDirty()) {
-        toast('Ми відновили ваші незбережені зміни з попереднього разу.', {
-          type: 'info',
-          timeout: 10000,
-          action: { label: 'Скасувати їх', onClick: () => discard() },
-        });
-      }
-    }
+    if (stored) restoreStoredDraft(stored);
   } catch (err) {
     showBoot(err.message || 'Не вдалося завантажити дані.', { retry: true });
     return;
@@ -507,6 +681,41 @@ async function enterApp() {
   }
   clearInterval(pollTimer);
   pollTimer = setInterval(pollLeads, LEADS_POLL_MS);
+}
+
+/**
+ * Незбережена чернетка з попереднього разу (закрита вкладка, перезавантаження, вивантажена телефоном сторінка).
+ * Якщо сайт відтоді змінювали деінде, переносимо лише ті правки, що не суперечать новішій збереженій версії.
+ */
+function restoreStoredDraft(stored) {
+  const when = stored.savedAt ? formatDate(stored.savedAt) : '';
+  const since = when ? ` (${when})` : '';
+  let skipped = [];
+  if (stored.base === state.savedJson) {
+    syncInto(state.draft, stored.draft);
+  } else {
+    let base = null;
+    try {
+      base = JSON.parse(stored.base);
+    } catch {
+      base = null;
+    }
+    if (!base) return;
+    const { merged, conflicts } = mergeContent(base, stored.draft, state.saved);
+    skipped = conflicts;
+    syncInto(state.draft, merged);
+  }
+  const restored = computeDirty();
+  if (!restored) forgetStoredDraft(); // нічого відновлювати — щоб не питати про це щоразу
+  const action = { label: 'Відкинути', onClick: () => discard() };
+  const skippedText = skipped.length
+    ? ` У розділах ${skipped.map((k) => `«${unitLabel(k)}»`).join(', ')} відтоді зберегли новіші зміни з іншого пристрою — там показано збережену версію.`
+    : '';
+  if (restored) {
+    toast(`Ми відновили ваші незбережені зміни${since}.${skippedText}`, { type: 'info', timeout: 14000, action, key: 'draft' });
+  } else if (skipped.length) {
+    toast(`Знайдено незбережені зміни${since}, але ці розділи відтоді змінили й зберегли на іншому пристрої.${skippedText}`, { type: 'info', timeout: 14000, key: 'draft' });
+  }
 }
 
 async function pollLeads() {
@@ -565,6 +774,7 @@ function bindStatic() {
   el.loginPassword.addEventListener('input', () => {
     el.loginError.hidden = true;
     el.loginPassword.removeAttribute('aria-invalid');
+    el.loginPassword.removeAttribute('aria-describedby');
   });
   el.loginToggle.addEventListener('click', () => {
     const show = el.loginPassword.type === 'password';
@@ -578,10 +788,11 @@ function bindStatic() {
   });
   el.bootRetry.addEventListener('click', () => (state.schema === null ? boot() : enterApp()));
 
-  el.saveBtn.addEventListener('click', save);
+  el.saveBtn.addEventListener('click', () => save());
   el.discardBtn.addEventListener('click', discard);
-  el.logoutBtn.addEventListener('click', logout);
-  el.logoutSide.addEventListener('click', logout);
+  el.logoutBtn.addEventListener('click', () => logout());
+  el.logoutSide.addEventListener('click', () => logout());
+  on('logout', (opts) => logout(opts || {}));
   el.menuBtn.addEventListener('click', openDrawer);
   el.drawerClose.addEventListener('click', () => closeDrawer());
   el.scrim.addEventListener('click', () => closeDrawer());
@@ -601,6 +812,23 @@ function bindStatic() {
       return;
     }
     if (e.key === 'Escape' && el.app.classList.contains('drawer-open')) closeDrawer();
+  });
+
+  // Телефон може вивантажити вкладку без попередження — записуємо чернетку, щойно сторінку сховали
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushDraft();
+  });
+  window.addEventListener('pagehide', flushDraft);
+
+  // «Відкрити сайт» / «Подивитися на сайті» при незбережених змінах — пояснюємо, чому там стара версія
+  document.addEventListener('click', (e) => {
+    const link = e.target instanceof Element ? e.target.closest('a[data-site]') : null;
+    if (!link || el.app.hidden || !state.draft || reauth) return;
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    if (!computeDirty()) return;
+    e.preventDefault();
+    closeDrawer({ restoreFocus: false });
+    openSite(link.href);
   });
 
   window.addEventListener('beforeunload', (e) => {
@@ -632,6 +860,9 @@ function bindStatic() {
     renderNav();
   });
   on('leads', renderNav);
+  on('uploads', () => {
+    if (state.saving) updateSaveUi();
+  });
   on('session', updateBanner);
   on('draft-replaced', () => {
     if (CONTENT_PAGES.has(route.name)) renderRoute({ preserve: true });

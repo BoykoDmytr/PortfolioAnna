@@ -104,6 +104,22 @@ test('SVG відхиляється (415), навіть з іменем .png', as
   }
 });
 
+test('«бомба»: крихітний файл із величезною роздільністю → 413 ще до розпакування', async () => {
+  const bomb = await sharp({ create: { width: 10000, height: 8100, channels: 3, background: { r: 255, g: 255, b: 255 } } }).png({ compressionLevel: 9 }).toBuffer();
+  assert.ok(bomb.length < 2 * 1024 * 1024, `файл маленький (${bomb.length} Б)`);
+  const before = fs.readdirSync(uploadsDir).length;
+  const res = await upload(bomb, { name: 'bomb.png' });
+  assert.equal(res.status, 413);
+  assert.match(res.data.error, /мегапікселів/);
+  assert.equal(fs.readdirSync(uploadsDir).length, before, 'нічого не збережено');
+
+  // 48 Мп (як у сучасних телефонах) — приймається
+  const big = await sharp({ create: { width: 8064, height: 6048, channels: 3, background: { r: 200, g: 180, b: 160 } } }).jpeg({ quality: 50 }).toBuffer();
+  const ok = await upload(big, { name: 'iphone.jpg', type: 'image/jpeg' });
+  assert.equal(ok.status, 201, ok.text);
+  assert.equal(ok.data.width, 2400);
+});
+
 test('інші формати (TIFF) → 415; AVIF і GIF приймаються', async () => {
   const tiff = await makeImage({ width: 20, height: 20, format: 'tiff' });
   assert.equal((await upload(tiff, { name: 'scan.tiff', type: 'image/tiff' })).status, 415);

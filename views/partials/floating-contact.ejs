@@ -1,3 +1,7 @@
+<%
+  // Без JS кнопка веде до контактів; якщо секцію «Контакти» приховано — одразу в перший месенджер
+  const fabHref = kit.shownTypes.includes('contact') ? '#contact' : (messengers[0] && messengers[0].href) || '#';
+-%>
 <% if (contacts.showFloatingButton && messengers.length) { -%>
 <div class="fab" data-fab>
   <ul class="fab__list" id="fab-list" data-fab-list>
@@ -10,7 +14,7 @@
     </li>
 <% }) -%>
   </ul>
-  <a class="fab__toggle" href="#contact" data-fab-toggle aria-controls="fab-list" aria-label="<%= kit.ui('contactMe') %>" data-label-open="<%= kit.ui('contactMe') %>" data-label-close="<%= kit.ui('close') %>">
+  <a class="fab__toggle" href="<%= fabHref %>" data-fab-toggle aria-controls="fab-list" aria-label="<%= kit.ui('contactMe') %>" data-label-open="<%= kit.ui('contactMe') %>" data-label-close="<%= kit.ui('close') %>">
     <span class="fab__toggle-icon fab__toggle-icon--open"><%- icon('chat') %></span>
     <span class="fab__toggle-icon fab__toggle-icon--close"><%- icon('close') %></span>
   </a>

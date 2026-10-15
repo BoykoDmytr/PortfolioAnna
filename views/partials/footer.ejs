@@ -1,12 +1,20 @@
 <%
   const footerParas = paras(settings.footerText);
   const brandLine = [brand.name, brand.tagline].filter(Boolean).join(' ');
+  // Viber з тим самим номером, що й телефон, не повторюємо цифрами — пишемо «Viber».
+  // Кожне посилання має зрозумілу назву для скрінрідера: «Написати у Viber: …», «Зателефонувати: …».
+  const digits = (v) => String(v || '').replace(/\D/g, '').slice(-9);
+  const phoneDigits = links.phone ? digits(links.phone.display) : '';
+  const footerLinks = messengers.map((m) => ({
+    ...m,
+    text: m.key === 'viber' && phoneDigits && digits(m.display) === phoneDigits ? 'Viber' : m.display,
+  }));
 -%>
 <footer class="site-footer">
   <div class="container">
     <div class="site-footer__top">
       <div class="site-footer__brand">
-        <a class="footer-brand" href="<%= kit.homeHref %>" aria-label="<%= brandLine || 'Home' %> — <%= kit.L.home %>">
+        <a class="footer-brand" href="<%= kit.homeHref %>" aria-label="<%= kit.brandSpoken || 'Home' %> — <%= kit.L.home %>">
 <% if (brand.logo) { -%>
           <img class="footer-brand__logo" src="<%= brand.logo %>" alt="" loading="lazy" decoding="async">
 <% } else { -%>
@@ -42,11 +50,11 @@
 <% if (messengers.length || links.email) { -%>
       <div class="site-footer__contact">
         <ul class="site-footer__links">
-<% messengers.forEach((m) => { -%>
-          <li><a href="<%= m.href %>"<% if (/^https:/.test(m.href)) { %> target="_blank" rel="noopener"<% } %>><%- icon(m.key) %><span><%= m.display %></span></a></li>
+<% footerLinks.forEach((m) => { -%>
+          <li><a href="<%= m.href %>"<% if (/^https:/.test(m.href)) { %> target="_blank" rel="noopener"<% } %>><%- icon(m.key) %><span><% if (m.label) { %><span class="visually-hidden"><%= m.label %>: </span><% } %><% if (m.text !== m.display) { %><span aria-hidden="true"><%= m.text %></span><span class="visually-hidden"><%= m.display %></span><% } else { %><%= m.text %><% } %></span></a></li>
 <% }) -%>
 <% if (links.email) { -%>
-          <li><a href="<%= links.email.href %>"><%- icon('mail') %><span><%= links.email.display %></span></a></li>
+          <li><a href="<%= links.email.href %>"><%- icon('mail') %><span><span class="visually-hidden"><%= kit.L.email %>: </span><%= links.email.display %></span></a></li>
 <% } -%>
         </ul>
       </div>

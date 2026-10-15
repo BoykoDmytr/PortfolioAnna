@@ -2,10 +2,12 @@
  * Фото: завантаження, вибір з медіатеки (модальне вікно) і сторінка «Медіатека».
  */
 
-import { h, formatBytes, plural } from './dom.js';
+import { h, formatBytes, plural, clone, isTouch } from './dom.js';
 import { icon } from './icons.js';
-import { api, assetUrl, checkUploadFile, uploadImage, ApiError } from './api.js';
-import { state, imageRefs, removeImageFromDraft, computeDirty, emit } from './state.js';
+import { api, assetUrl, checkUploadFile, uploadImage, ApiError, UPLOAD_MAX_BYTES } from './api.js';
+import {
+  state, imageRefs, removeImageFromDraft, computeDirty, emit, trackUpload, rebaseDraft, routeForPath, unitLabel,
+} from './state.js';
 import { toast, openModal, confirmDialog, button, pageHeader, emptyState, loadingBlock } from './ui.js';
 
 export const ACCEPT = 'image/jpeg,image/png,image/webp,image/avif,image/gif,.jpg,.jpeg,.png,.webp,.avif,.gif';
@@ -45,24 +47,92 @@ export function chooseFiles({ multiple = false } = {}) {
   });
 }
 
-/**
- * Завантажує один файл з перевіркою. onProgress(0..1)
- * → результат сервера або null (помилку вже показано)
- */
-export async function uploadOne(file, { purpose = 'photo', onProgress } = {}) {
-  const problem = checkUploadFile(file);
-  if (problem) {
-    toast(problem, { type: 'error' });
+/* ---------------- підготовка фото на пристрої ---------------- */
+
+/** Сервер однаково зменшує фото до 2400 px (логотип — до 800 px), тож великі файли з телефона стискаємо ще до відправлення. */
+const MAX_SIDE = { photo: 2400, logo: 800 };
+const SHRINK_OVER_BYTES = 6 * 1024 * 1024;
+const extOf = (file) => ((file.name || '').split('.').pop() || '').toLowerCase();
+const isHeic = (file) => ['heic', 'heif'].includes(extOf(file)) || /heic|heif/i.test(file.type || '');
+
+/** Перемальовує фото меншим JPEG (з урахуванням повороту з EXIF). → File або null, якщо браузер не впорався. */
+async function shrinkImage(file, purpose) {
+  if (typeof createImageBitmap !== 'function') return null;
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  } catch {
     return null;
   }
   try {
-    const result = await uploadImage(file, { purpose, onProgress });
-    rememberUpload(result);
-    return result;
-  } catch (err) {
-    toast(err instanceof ApiError ? err.message : 'Не вдалося завантажити фото. Спробуйте ще раз.', { type: 'error' });
+    const max = MAX_SIDE[purpose] || MAX_SIDE.photo;
+    const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.fillStyle = '#ffffff'; // JPEG не має прозорості
+    ctx.fillRect(0, 0, width, height);
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+    if (!blob) return null;
+    const base = (file.name || 'photo').replace(/\.[^.]+$/, '') || 'photo';
+    return new File([blob], `${base}.jpg`, { type: 'image/jpeg', lastModified: Date.now() });
+  } catch {
     return null;
+  } finally {
+    if (bitmap && typeof bitmap.close === 'function') bitmap.close();
   }
+}
+
+/**
+ * Перевіряє файл і за потреби зменшує його / переводить HEIC у JPEG (якщо браузер уміє його відкрити).
+ * → { file } або { error }
+ */
+export async function prepareUpload(file, { purpose = 'photo' } = {}) {
+  if (isHeic(file)) {
+    const converted = purpose === 'photo' ? await shrinkImage(file, purpose) : null;
+    return converted ? { file: converted } : { error: checkUploadFile(file) };
+  }
+  const problem = checkUploadFile(file);
+  const tooBig = file.size > UPLOAD_MAX_BYTES;
+  if (problem && !tooBig) return { error: problem };
+  const ext = extOf(file);
+  const shrinkable = purpose === 'photo' && ext !== 'gif' && file.type !== 'image/gif';
+  const worthShrinking = tooBig || (file.size > SHRINK_OVER_BYTES && !/png/i.test(`${file.type} ${ext}`));
+  if (shrinkable && worthShrinking) {
+    const smaller = await shrinkImage(file, purpose);
+    if (smaller && smaller.size < file.size && smaller.size <= UPLOAD_MAX_BYTES) return { file: smaller };
+  }
+  return problem ? { error: problem } : { file };
+}
+
+/**
+ * Завантажує один файл з перевіркою. onProgress(0..1)
+ * onError(message) — показати помилку біля поля; без нього помилка йде у сповіщення.
+ * → результат сервера або null (помилку вже показано)
+ */
+export function uploadOne(file, { purpose = 'photo', onProgress, onError } = {}) {
+  const fail = (message) => {
+    if (onError) onError(message);
+    else toast(message, { type: 'error', key: 'upload' });
+    return null;
+  };
+  return trackUpload((async () => {
+    const prepared = await prepareUpload(file, { purpose });
+    if (prepared.error) return fail(prepared.error);
+    try {
+      const result = await uploadImage(prepared.file, { purpose, onProgress });
+      rememberUpload(result);
+      return result;
+    } catch (err) {
+      return fail(err instanceof ApiError ? err.message : 'Не вдалося завантажити фото. Спробуйте ще раз.');
+    }
+  })());
 }
 
 /** Черга завантажень з рядком прогресу для кожного файлу. → успішні результати */
@@ -79,6 +149,7 @@ async function uploadMany(files, queueEl) {
     queueEl.append(row);
     queueEl.hidden = false;
     status.textContent = 'Завантаження…';
+    // eslint-disable-next-line no-await-in-loop
     const result = await uploadOne(file, {
       onProgress: (p) => {
         bar.style.width = `${Math.round(p * 100)}%`;
@@ -106,53 +177,82 @@ async function uploadMany(files, queueEl) {
 
 /* ---------------- видалення ---------------- */
 
+/**
+ * Прибирає фото з опублікованого контенту ще ДО видалення файлу — щоб сайт ні на мить не показував «биту» картинку,
+ * а «Відкинути зміни» не повертав посилання на файл, якого вже немає.
+ * → true, якщо вдалося
+ */
+async function unpublishImage(url) {
+  if (state.saving) {
+    toast('Зачекайте, доки збережуться зміни, і спробуйте ще раз.', { type: 'info' });
+    return false;
+  }
+  state.saving = true; // поки оновлюємо сайт, звичайне «Зберегти» чекає
+  try {
+    const fresh = await api.get('content');
+    const cleaned = clone(fresh);
+    if (!removeImageFromDraft(url, cleaned)) return true; // на сайті його вже немає
+    const res = await api.put('content', cleaned);
+    rebaseDraft(res.content);
+    return true;
+  } catch (err) {
+    if (err.status === 422 && err.details.length) {
+      const route = routeForPath(err.details[0].path);
+      const where = route ? ` у розділі «${unitLabel(route.name === 'section' ? `sections.${route.param}` : route.param || 'order')}»` : '';
+      toast(`Це фото не можна просто прибрати: воно обов’язкове${where}. Спершу оберіть там інше фото й збережіть зміни, а потім видаліть це.`, { type: 'error', timeout: 12000 });
+    } else {
+      toast(err.message, { type: 'error' });
+    }
+    return false;
+  } finally {
+    state.saving = false;
+    computeDirty();
+  }
+}
+
 /** → true, якщо файл видалено */
 export async function deleteMedia(item) {
-  const draftRefs = imageRefs(state.draft);
-  const used = isUsed(item, draftRefs);
+  const onSite = Boolean(item.used) || imageRefs(state.saved).has(item.url);
+  const inDraft = imageRefs(state.draft).has(item.url);
   const ok = await confirmDialog({
     title: 'Видалити фото?',
-    message: used
-      ? 'Це фото зараз використовується на сайті. Після видалення ми приберемо його з усіх полів — вам залишиться натиснути «Зберегти зміни» (і за потреби обрати інше фото).'
-      : 'Файл буде видалено з медіатеки назавжди.',
-    confirmLabel: used ? 'Все одно видалити' : 'Видалити',
+    message: onSite
+      ? 'Це фото зараз є на сайті. Ми одразу приберемо його звідусіль, де воно показується (сайт оновиться без нього), і видалимо файл. Потім за потреби оберіть інше фото.'
+      : inDraft
+        ? 'Це фото обрано у ваших незбережених змінах. Ми приберемо його з цих полів і видалимо файл.'
+        : 'Файл буде видалено з медіатеки назавжди.',
+    confirmLabel: onSite || inDraft ? 'Усе одно видалити' : 'Видалити',
     danger: true,
   });
   if (!ok) return false;
 
   const remove = (force) => api.del(`media/${encodeURIComponent(item.name)}${force ? '?force=1' : ''}`);
+  if (onSite && !(await unpublishImage(item.url))) return false;
   try {
-    await remove(used);
+    await remove(onSite);
   } catch (err) {
-    if (err.status === 409) {
-      const again = await confirmDialog({
-        title: 'Фото використовується',
-        message: err.message,
-        confirmLabel: 'Видалити',
-        danger: true,
-      });
-      if (!again) return false;
-      try {
-        await remove(true);
-      } catch (err2) {
-        toast(err2.message, { type: 'error' });
-        return false;
-      }
-    } else {
+    if (err.status !== 409) {
       toast(err.message, { type: 'error' });
+      return false;
+    }
+    // Фото тим часом з’явилося на сайті (наприклад, збережене з іншого пристрою)
+    const again = await confirmDialog({ title: 'Фото використовується', message: err.message, confirmLabel: 'Прибрати з сайту й видалити', danger: true });
+    if (!again || !(await unpublishImage(item.url))) return false;
+    try {
+      await remove(true);
+    } catch (err2) {
+      toast(err2.message, { type: 'error' });
       return false;
     }
   }
 
   if (state.media) state.media = state.media.filter((m) => m.name !== item.name);
   const cleared = removeImageFromDraft(item.url);
-  if (cleared) {
-    computeDirty();
-    emit('draft-replaced');
-    toast(`Фото видалено і прибрано з ${cleared} ${plural(cleared, ['поля', 'полів', 'полів'])}. Натисніть «Зберегти зміни», щоб оновити сайт.`, { type: 'info', timeout: 9000 });
-  } else {
-    toast('Фото видалено');
-  }
+  if (cleared) computeDirty();
+  emit('draft-replaced');
+  if (onSite) toast('Фото видалено й прибрано із сайту.', { type: 'info', timeout: 7000 });
+  else if (cleared) toast(`Фото видалено і прибрано з ${cleared} ${plural(cleared, ['поля', 'полів', 'полів'])} у ваших змінах.`, { type: 'info', timeout: 7000 });
+  else toast('Фото видалено');
   return true;
 }
 
@@ -207,7 +307,7 @@ export function pickImage({ current = '', purpose = 'photo', title = 'Обері
         h('span', { class: 'media-tile__name', text: item.name }),
         h('span', { class: 'media-tile__size', text: item.width && item.height ? `${item.width}×${item.height}` : formatBytes(item.size) }),
       ),
-      isUsed(item, draftRefs) && h('span', { class: 'media-tile__badge', text: 'на сайті' }),
+      isUsed(item, draftRefs) && h('span', { class: 'media-tile__badge', text: 'На сайті' }),
       selected && h('span', { class: 'media-tile__check' }, icon('check'))));
     }
   }).catch((err) => {
@@ -242,10 +342,13 @@ export function renderMediaPage(view) {
     onClick: async () => startUpload(await chooseFiles({ multiple: true })),
   });
 
-  const drop = h('div', { class: 'dropzone', tabIndex: 0, role: 'button', 'aria-label': 'Завантажити фото: натисніть або перетягніть файли сюди' },
+  const touch = isTouch();
+  const drop = h('div', { class: 'dropzone', tabIndex: 0, role: 'button', 'aria-label': touch ? 'Завантажити фото' : 'Завантажити фото: натисніть або перетягніть файли сюди' },
     h('span', { class: 'dropzone__icon' }, icon('upload')),
-    h('span', { class: 'dropzone__title', text: 'Перетягніть фото сюди' }),
-    h('span', { class: 'dropzone__hint', text: 'або натисніть, щоб обрати на комп’ютері чи телефоні. JPG, PNG, WebP — до 15 МБ. Фото автоматично стискаються.' }),
+    h('span', { class: 'dropzone__title', text: touch ? 'Натисніть, щоб додати фото' : 'Перетягніть фото сюди' }),
+    h('span', { class: 'dropzone__hint', text: touch
+      ? 'Можна обрати кілька фото одразу. JPG, PNG, WebP; великі фото автоматично зменшуються.'
+      : 'або натисніть, щоб обрати файли. JPG, PNG, WebP; великі фото автоматично зменшуються.' }),
   );
   const openPicker = async () => startUpload(await chooseFiles({ multiple: true }));
   drop.addEventListener('click', openPicker);

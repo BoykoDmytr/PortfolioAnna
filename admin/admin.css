@@ -14,8 +14,8 @@
   --accent-soft: #f3ebe2;
   --accent-ring: rgba(138, 106, 74, 0.22);
   --ink: #3a3029;
-  --muted: #74675c;
-  --faint: #9a8d81;
+  --muted: #6d6055;
+  --faint: #776a5f;
   --line: rgba(58, 48, 41, 0.12);
   --line-strong: rgba(58, 48, 41, 0.22);
   --on-accent: #fffdfb;
@@ -293,7 +293,7 @@ h3 {
   color: var(--danger);
 }
 
-@media (pointer: coarse) {
+@media (pointer: coarse), (max-width: 720px) {
   .icon-btn {
     width: 44px;
     height: 44px;
@@ -458,6 +458,15 @@ h3 {
   text-align: center;
 }
 
+/* Пояснення, що робити далі (напр., стандартний пароль з телефона) — не помилка в паролі */
+.login__notice[data-type="warn"] {
+  border: 1px solid rgba(141, 100, 24, 0.25);
+  background: var(--warn-soft);
+  color: #5d4512;
+  line-height: 1.5;
+  text-align: left;
+}
+
 .login__form {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -472,6 +481,10 @@ h3 {
 }
 
 .login__back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
   color: var(--muted);
   font-size: 13px;
   text-decoration: none;
@@ -546,6 +559,20 @@ h3 {
 
 .nav-group + .nav-group {
   margin-top: 18px;
+}
+
+.nav-group--top + .nav-group {
+  margin-top: 12px;
+}
+
+/* Меню прокручується — тінь знизу підказує, що нижче є ще пункти */
+.sidebar__nav {
+  background:
+    linear-gradient(var(--surface) 30%, rgba(255, 253, 251, 0)) center top / 100% 40px no-repeat local,
+    linear-gradient(rgba(255, 253, 251, 0), var(--surface) 70%) center bottom / 100% 40px no-repeat local,
+    radial-gradient(farthest-side at 50% 0, rgba(58, 48, 41, 0.14), rgba(58, 48, 41, 0)) center top / 100% 12px no-repeat scroll,
+    radial-gradient(farthest-side at 50% 100%, rgba(58, 48, 41, 0.14), rgba(58, 48, 41, 0)) center bottom / 100% 12px no-repeat scroll;
+  background-color: var(--surface);
 }
 
 .nav-group__title {
@@ -848,6 +875,44 @@ h3 {
   font-size: 14px;
 }
 
+/* Підказка про демонстраційний вміст на сторінці секції */
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0 0 20px;
+  padding: 12px 8px 12px 16px;
+  border: 1px solid rgba(141, 100, 24, 0.25);
+  border-radius: var(--radius-md);
+  background: var(--warn-soft);
+  color: #5d4512;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.notice > .i {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+}
+
+.notice__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+}
+
+.notice__text strong {
+  font-weight: 600;
+}
+
+.notice__close {
+  flex: none;
+  margin: -8px 0 -8px auto;
+  color: inherit;
+}
+
 /* ---------- сторінка ---------- */
 
 .view {
@@ -973,13 +1038,152 @@ h3 {
   box-shadow: var(--shadow-card), 0 0 0 4px rgba(248, 239, 217, 0.9);
 }
 
-.card--colors.is-inactive .theme-colors {
-  opacity: 0.55;
+.card--colors.is-inactive {
+  border-style: dashed;
+  border-color: var(--line-strong);
+  box-shadow: none;
 }
 
-.card--colors.is-inactive .theme-colors:focus-within,
-.card--colors.is-inactive .theme-colors:hover {
-  opacity: 1;
+.card__state {
+  flex: none;
+  align-self: flex-start;
+}
+
+.card--colors:not(.is-inactive) .card__state {
+  display: none;
+}
+
+.card--colors .card__head {
+  flex-wrap: wrap;
+}
+
+.card--colors .card__titles {
+  flex: 1 1 260px;
+}
+
+@media (max-width: 560px) {
+  .card--colors .card__state {
+    order: -1;
+  }
+}
+
+/* Перевірка контрасту власних кольорів */
+.contrast {
+  display: grid;
+  gap: 10px;
+}
+
+.contrast__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.contrast__row > .i {
+  width: 18px;
+  height: 18px;
+}
+
+.contrast__row > p {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.contrast__row.is-ok {
+  background: var(--success-soft);
+  color: #3d6343;
+}
+
+.contrast__row.is-bad {
+  background: var(--warn-soft);
+  color: #5d4512;
+}
+
+.contrast__chip {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--c);
+  box-shadow: 0 0 0 1px var(--line-strong);
+}
+
+.contrast__note {
+  margin: 0;
+  padding: 0 2px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Живий попередній перегляд власних кольорів (ті самі кольори, що виведе сайт) */
+.theme-preview {
+  display: grid;
+  gap: 8px;
+  margin: 20px 0 14px;
+  padding: 22px 22px 20px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: var(--p-bg, var(--bg));
+  color: var(--p-ink, var(--ink));
+}
+
+.theme-preview[hidden] {
+  display: none;
+}
+
+.theme-preview__eyebrow {
+  color: var(--p-strong, var(--accent-strong));
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+.theme-preview__title {
+  font-family: var(--display);
+  font-size: 26px;
+  font-weight: 400;
+  line-height: 1.15;
+}
+
+.theme-preview__text {
+  color: var(--p-muted, var(--muted));
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.theme-preview__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+  margin-top: 6px;
+}
+
+.theme-preview__btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 42px;
+  padding: 0 20px;
+  border-radius: 2px;
+  background: var(--p-accent, var(--accent));
+  color: var(--p-on-accent, var(--on-accent));
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.theme-preview__link {
+  color: var(--p-strong, var(--accent-strong));
+  font-size: 13px;
+  font-weight: 500;
+  border-bottom: 1px solid currentColor;
 }
 
 .grid-2 {
@@ -1069,6 +1273,24 @@ h3 {
 
 .field__warn {
   color: var(--warn);
+}
+
+.field__link {
+  margin-top: 10px;
+}
+
+.field__link .switch__label {
+  font-size: 13.5px;
+}
+
+.is-linked .input[readonly] {
+  background: var(--bg);
+  color: var(--muted);
+}
+
+.i18n__over {
+  margin-top: 6px;
+  font-size: 12.5px;
 }
 
 .counter {
@@ -1640,6 +1862,64 @@ textarea.input {
   display: flex;
 }
 
+/* Порожнє поле — велика ціль: натиснути й обрати фото */
+.imgf.is-empty .imgf__preview,
+.imgf.is-broken .imgf__preview {
+  cursor: pointer;
+}
+
+.imgf.is-empty .imgf__preview:hover,
+.imgf.is-broken .imgf__preview:hover {
+  border-color: var(--accent);
+}
+
+.imgf.is-empty .imgf__preview:hover .imgf__empty {
+  color: var(--accent-strong);
+}
+
+/* Затемнення фото головного екрана — так само, як на сайті (--ov задає поле «Затемнення фото, %») */
+/* Попередній перегляд затемнення головного фото — та сама формула, що й .hero__shade
+   на сайті (широкий екран): текстовий лівий бік завжди не світліший за 30 %, правий лишається світлим. */
+.imgf__shade {
+  --ov-text: max(var(--ov, 0.3), 0.3);
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(31, 23, 17, 0.3) 0%, rgba(31, 23, 17, 0) 18%),
+    linear-gradient(
+      90deg,
+      rgba(31, 23, 17, calc(0.3 + var(--ov-text))) 0%,
+      rgba(31, 23, 17, calc(0.24 + var(--ov-text) * 0.9)) 40%,
+      rgba(31, 23, 17, calc(0.08 + var(--ov-text) * 0.5)) 62%,
+      rgba(31, 23, 17, 0) 84%
+    ),
+    linear-gradient(0deg, rgba(31, 23, 17, 0.6) 0%, rgba(31, 23, 17, 0.28) 12%, rgba(31, 23, 17, 0) 34%),
+    rgba(31, 23, 17, calc(0.06 + var(--ov, 0.3) * 0.24));
+  pointer-events: none;
+}
+
+.imgf.is-empty .imgf__shade,
+.imgf.is-broken .imgf__shade {
+  display: none;
+}
+
+.imgf__notes {
+  display: grid;
+  gap: 2px;
+}
+
+.imgf__notes:empty {
+  display: none;
+}
+
+.imgf__problem {
+  color: var(--danger);
+}
+
+.has-error .imgf__notes > .field__warn:not(.imgf__problem) {
+  display: none;
+}
+
 .imgf__preview.is-dragover {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-ring);
@@ -1995,6 +2275,88 @@ textarea.input {
   gap: 22px;
   padding: 20px 22px 24px;
   border-top: 1px solid var(--line);
+}
+
+/* Переміщений елемент коротко підсвічується, щоб було видно, куди він став */
+.item.is-moved,
+.structure__row.is-moved {
+  animation: moved 1.2s var(--ease);
+}
+
+@keyframes moved {
+  0%,
+  35% {
+    background-color: var(--accent-soft);
+    box-shadow: 0 0 0 2px var(--accent-ring);
+  }
+}
+
+/* Меню дій «⋯» (на телефоні — панель знизу) */
+.sheet {
+  display: grid;
+  gap: 4px;
+}
+
+.sheet__btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 500;
+  text-align: left;
+}
+
+.sheet__btn .i {
+  width: 20px;
+  height: 20px;
+  color: var(--muted);
+}
+
+.sheet__btn:not(:disabled):hover {
+  background: var(--accent-soft);
+}
+
+.sheet__btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.sheet__btn--danger,
+.sheet__btn--danger .i {
+  color: var(--danger);
+}
+
+.sheet__btn--danger:not(:disabled):hover {
+  background: var(--danger-soft);
+}
+
+.sheet__label {
+  flex: 1;
+}
+
+.sheet__hint {
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 400;
+}
+
+.modal--sheet .modal__title {
+  overflow: hidden;
+  font-size: 1.4rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modal--sheet .modal__footer {
+  border-top: 0;
+  padding-top: 4px;
 }
 
 @media (pointer: coarse) {
@@ -2748,6 +3110,46 @@ a.lead__link:hover {
   width: 170px;
 }
 
+.lead.is-fresh {
+  animation: lead-fresh 2.4s var(--ease);
+}
+
+@keyframes lead-fresh {
+  0%,
+  40% {
+    box-shadow: var(--shadow-card), 0 0 0 3px var(--accent-ring);
+    background-color: var(--accent-soft);
+  }
+}
+
+.lead__note {
+  display: grid;
+  gap: 6px;
+}
+
+.lead__note-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.lead__note-label {
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.lead__note-state {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+textarea.lead__note-input {
+  min-height: 64px;
+  font-size: 14px;
+}
+
 /* ===================== Безпека ===================== */
 
 .status-line {
@@ -2880,6 +3282,13 @@ a.lead__link:hover {
 .backup__meta {
   color: var(--muted);
   font-size: 12.5px;
+}
+
+.backup__changes {
+  margin-top: 1px;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .backup__actions {
@@ -3216,7 +3625,7 @@ a.lead__link:hover {
     /* backdrop-filter зробив би topbar контейнером для position: fixed — і нижня панель збереження «прилипла» б догори */
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
-    background: rgba(248, 244, 239, 0.98);
+    background: var(--bg);
   }
 
   .topbar__menu {
@@ -3300,15 +3709,35 @@ a.lead__link:hover {
   }
 
   .toasts {
-    left: 16px;
-    right: 16px;
-    bottom: 16px;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
     width: auto;
     align-items: stretch;
   }
 
+  /* На телефоні — одне компактне сповіщення над панеллю збереження */
+  .toast {
+    gap: 10px;
+    padding: 8px 6px 8px 12px;
+    font-size: 13.5px;
+    line-height: 1.4;
+  }
+
+  .toast__text {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    padding-top: 2px;
+  }
+
+  .toast__icon {
+    margin-top: 1px;
+  }
+
   .is-dirty .toasts {
-    bottom: calc(84px + env(safe-area-inset-bottom));
+    bottom: calc(78px + env(safe-area-inset-bottom));
   }
 
   .banner {
@@ -3443,8 +3872,13 @@ a.lead__link:hover {
   }
 
   .item__actions .icon-btn {
-    width: 36px;
-    height: 40px;
+    width: 40px;
+    height: 44px;
+  }
+
+  /* «Дублювати» і «Видалити» — у меню «⋯» (більші кнопки, «Видалити» не впритул до інших) */
+  .item__actions .item__wide {
+    display: none;
   }
 
   .lead {
@@ -3523,6 +3957,64 @@ a.lead__link:hover {
 
   .savebar__save {
     flex: 1;
+  }
+}
+
+/* ===================== Сенсорні екрани: цілі для пальця ≥ 44 px ===================== */
+
+@media (pointer: coarse), (max-width: 720px) {
+  .btn--sm {
+    --btn-h: 44px;
+  }
+
+  .select--sm,
+  .chip,
+  .lead__link,
+  .topbar__link {
+    min-height: 44px;
+  }
+
+  .nav-link,
+  .nav-link--sub {
+    min-height: 44px;
+  }
+
+  .item__actions .icon-btn,
+  .star,
+  .toast__close {
+    width: 44px;
+    height: 44px;
+  }
+
+  .item__actions {
+    gap: 2px;
+  }
+
+  .toast__action {
+    min-height: 44px;
+    margin: -8px 0;
+  }
+
+  .toast__close {
+    margin: -10px -2px -10px 0;
+  }
+
+  .swatches {
+    gap: 8px;
+  }
+
+  .swatch {
+    width: 44px;
+    height: 44px;
+  }
+
+  .switch {
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .banner .btn {
+    min-height: 44px;
   }
 }
 

@@ -2,7 +2,7 @@
  * Сторінка «Безпека»: зміна пароля і сповіщення про нові заявки в Telegram.
  */
 
-import { h, nextId } from '../dom.js';
+import { h, nextId, describedBy, plural } from '../dom.js';
 import { icon } from '../icons.js';
 import { api } from '../api.js';
 import { state, emit } from '../state.js';
@@ -10,7 +10,8 @@ import { pageHeader, card, toast, button, setBusy, switchControl, loadingBlock, 
 
 /** Поле пароля з кнопкою «показати». */
 export function passwordInput({ label, autocomplete, help, id = nextId() }) {
-  const input = h('input', { id, type: 'password', class: 'input', autocomplete, required: true });
+  // Без автовеликої літери й автовиправлення: коли пароль показано, телефон інакше перетворить «anna2026» на «Anna2026»
+  const input = h('input', { id, type: 'password', class: 'input', autocomplete, required: true, autocapitalize: 'none', autocorrect: 'off' });
   input.spellcheck = false;
   const toggle = h('button', { type: 'button', class: 'input-action', 'aria-label': 'Показати пароль', title: 'Показати пароль', 'aria-pressed': 'false' }, icon('eye'));
   toggle.addEventListener('click', () => {
@@ -23,18 +24,20 @@ export function passwordInput({ label, autocomplete, help, id = nextId() }) {
     toggle.setAttribute('aria-pressed', String(show));
     input.focus();
   });
-  const error = h('p', { class: 'field__error', hidden: true });
+  const error = h('p', { class: 'field__error', id: nextId('err'), hidden: true });
   const root = h('div', { class: 'field' },
     h('div', { class: 'field__head' }, h('label', { class: 'field__label', for: id, text: label })),
-    help && h('p', { class: 'field__help', text: help }),
+    help && h('p', { class: 'field__help', id: `${id}-help`, text: help }),
     h('div', { class: 'input-wrap' }, input, toggle),
     error);
+  if (help) describedBy(input, `${id}-help`, true);
   const setError = (msg) => {
     root.classList.toggle('has-error', Boolean(msg));
     error.hidden = !msg;
     error.textContent = msg || '';
     if (msg) input.setAttribute('aria-invalid', 'true');
     else input.removeAttribute('aria-invalid');
+    describedBy(input, error.id, Boolean(msg));
   };
   input.addEventListener('input', () => setError(''));
   return { root, input, setError };
@@ -72,27 +75,37 @@ function passwordCard() {
     setBusy(submit, true, 'Змінюємо…');
     try {
       await api.post('password', { current: current.input.value, next: next.input.value });
-      form.reset();
       state.session.mustChangePassword = false;
       emit('session');
-      toast('Пароль змінено. Запам’ятайте його — він знадобиться для наступного входу.');
+      // Картка з новим описом (без «стандартного пароля»)
+      const fresh = passwordCard();
+      root.replaceWith(fresh);
+      const heading = fresh.querySelector('.card__title');
+      if (heading) {
+        heading.tabIndex = -1;
+        heading.focus({ preventScroll: true });
+      }
+      toast('Пароль змінено. Запам’ятайте його — він знадобиться для наступного входу.', { key: 'password' });
     } catch (err) {
       const fields = { current, next };
+      const left = Number.isInteger(err.data.attemptsLeft) ? err.data.attemptsLeft : null;
+      const leftText = left !== null && left > 0 && left <= 3
+        ? ` ${left === 1 ? 'Залишилася' : 'Залишилося'} ${left} ${plural(left, ['спроба', 'спроби', 'спроб'])}.`
+        : '';
       let shown = false;
       for (const d of err.details) {
         if (fields[d.field]) {
-          fields[d.field].setError(d.message);
+          fields[d.field].setError(d.field === 'current' ? `${d.message.replace(/\.$/, '')}.${leftText}` : d.message);
           shown = true;
         }
       }
       if (shown) form.querySelector('[aria-invalid="true"]').focus();
-      toast(err.message, { type: 'error' });
-    } finally {
+      toast(err.message, { type: 'error', key: 'password' });
       setBusy(submit, false);
     }
   });
 
-  return card({
+  const root = card({
     title: 'Пароль до адмін-панелі',
     description: state.session.mustChangePassword
       ? 'Зараз використовується стандартний пароль. Змініть його на власний — так ніхто інший не зможе змінити ваш сайт.'
@@ -100,6 +113,7 @@ function passwordCard() {
     className: state.session.mustChangePassword ? 'card--attention' : '',
     children: [form],
   });
+  return root;
 }
 
 const STEPS = [
@@ -115,7 +129,7 @@ function howTo() {
   return h('details', { class: 'howto' },
     h('summary', { class: 'howto__summary' }, icon('info'), h('span', { text: 'Як налаштувати — 6 простих кроків (близько 3 хвилин)' }), icon('chevron', 'i howto__chev')),
     h('ol', { class: 'howto__steps' }, STEPS.map((parts) => h('li', null, parts.map((p) => (typeof p === 'string' ? p : h('a', { href: p.link, target: '_blank', rel: 'noopener', text: p.text })))))),
-    h('p', { class: 'howto__note', text: 'Це безкоштовно. Токен зберігається лише на вашому комп’ютері і не потрапляє на сайт.' }));
+    h('p', { class: 'howto__note', text: 'Це безкоштовно. Токен зберігається лише на сервері сайту й ніколи не показується відвідувачам.' }));
 }
 
 function notificationsCard() {
@@ -137,17 +151,19 @@ function notificationsCard() {
     const tokenField = h('div', { class: 'field' },
       h('div', { class: 'field__head' }, h('label', { class: 'field__label', for: tokenId, text: 'Токен бота' })),
       h('p', { class: 'field__help', text: settings.telegramTokenSet ? 'Токен уже збережено. Залиште поле порожнім, щоб не змінювати його.' : 'Його надішле @BotFather після створення бота.' }),
-      token, h('p', { class: 'field__error', hidden: true }));
+      token, h('p', { class: 'field__error', id: nextId('err'), hidden: true }));
     const chatField = h('div', { class: 'field' },
       h('div', { class: 'field__head' }, h('label', { class: 'field__label', for: chatId, text: 'Chat ID' })),
       h('p', { class: 'field__help', text: 'Число, яке надішле @userinfobot.' }),
-      chat, h('p', { class: 'field__error', hidden: true }));
+      chat, h('p', { class: 'field__error', id: nextId('err'), hidden: true }));
     const fieldEls = { telegramToken: tokenField, telegramChatId: chatField };
     const clearErrors = () => {
       for (const el of Object.values(fieldEls)) {
         el.classList.remove('has-error');
-        el.querySelector('.field__error').hidden = true;
+        const p = el.querySelector('.field__error');
+        p.hidden = true;
         el.querySelector('.input').removeAttribute('aria-invalid');
+        describedBy(el.querySelector('.input'), p.id, false);
       }
     };
     const showErrors = (details) => {
@@ -159,6 +175,7 @@ function notificationsCard() {
         const p = el.querySelector('.field__error');
         p.hidden = false;
         p.textContent = d.message;
+        describedBy(el.querySelector('.input'), p.id, true);
       }
     };
 
@@ -173,11 +190,11 @@ function notificationsCard() {
         const payload = { telegramEnabled: enabled.input.checked, telegramChatId: chat.value.trim() };
         if (token.value.trim()) payload.telegramToken = token.value.trim();
         await api.put('notifications', payload);
-        toast(enabled.input.checked ? 'Сповіщення увімкнено' : 'Налаштування збережено');
+        toast(enabled.input.checked ? 'Сповіщення увімкнено' : 'Налаштування збережено', { key: 'notify' });
         root.replaceWith(notificationsCard());
       } catch (err) {
         showErrors(err.details);
-        toast(err.message, { type: 'error' });
+        toast(err.message, { type: 'error', key: 'notify' });
         setBusy(saveBtn, false);
       }
     });
@@ -190,10 +207,10 @@ function notificationsCard() {
         if (token.value.trim()) payload.telegramToken = token.value.trim();
         if (chat.value.trim()) payload.telegramChatId = chat.value.trim();
         await api.post('notifications/test', payload);
-        toast('Готово! Перевірте Telegram — там має бути тестове повідомлення.');
+        toast('Готово! Перевірте Telegram — там має бути тестове повідомлення.', { key: 'notify' });
       } catch (err) {
         showErrors(err.details);
-        toast(err.message, { type: 'error' });
+        toast(err.message, { type: 'error', key: 'notify' });
       } finally {
         setBusy(testBtn, false);
       }
@@ -231,10 +248,29 @@ function notificationsCard() {
   return root;
 }
 
+function sessionsCard() {
+  const btn = button({ label: 'Вийти на всіх пристроях', iconName: 'logout', variant: 'secondary' });
+  btn.addEventListener('click', async () => {
+    const ok = await confirmDialog({
+      title: 'Вийти на всіх пристроях?',
+      message: 'Адмін-панель закриється на всіх телефонах і комп’ютерах, де ви входили, — і на цьому теж. Щоб продовжити, потрібно буде знову ввести пароль.',
+      confirmLabel: 'Вийти всюди',
+      danger: true,
+    });
+    if (ok) emit('logout', { everywhere: true });
+  });
+  return card({
+    title: 'Пристрої, де ви увійшли',
+    description: 'Входили в адмінку з чужого пристрою або загубили телефон? Вийдіть на всіх пристроях одразу. Якщо пароль міг дізнатися хтось інший, спершу змініть його.',
+    children: [h('div', { class: 'form-actions' }, btn)],
+  });
+}
+
 export function renderSecurityPage(view) {
   view.append(
-    pageHeader({ eyebrow: 'Доступ', title: 'Безпека', description: 'Пароль до адмін-панелі та сповіщення про нові заявки.' }),
+    pageHeader({ eyebrow: 'Доступ', title: 'Безпека', description: 'Пароль до адмін-панелі, вихід на всіх пристроях і сповіщення про нові заявки.' }),
     passwordCard(),
+    sessionsCard(),
     notificationsCard(),
   );
 }

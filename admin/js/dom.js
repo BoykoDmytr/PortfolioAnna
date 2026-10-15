@@ -39,6 +39,23 @@ function appendChildren(el, children) {
   }
 }
 
+/**
+ * Додає дітей до елемента, пропускаючи null / undefined / false / true.
+ * Використовуйте замість el.append(), коли хоч одна дитина може бути «порожньою»:
+ * нативний append() перетворює null на текст «null».
+ */
+export function append(el, ...children) {
+  appendChildren(el, children);
+  return el;
+}
+
+/** Те саме, що el.replaceChildren(), але без «null» / «false» у тексті. */
+export function replace(el, ...children) {
+  el.replaceChildren();
+  appendChildren(el, children);
+  return el;
+}
+
 /** h('button', { class: 'btn', onClick }, 'Текст', childNode, [...]) */
 export function h(tag, props, ...children) {
   const el = document.createElement(tag);
@@ -86,6 +103,28 @@ export function uid() {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/** Значення за шляхом «sections.hero.image» (індекси масивів — числами). */
+export function getByPath(obj, path) {
+  let node = obj;
+  for (const part of String(path).split('.')) {
+    if (node === undefined || node === null) return undefined;
+    node = node[part];
+  }
+  return node;
+}
+
+/** Додає / прибирає id в aria-describedby (зберігаючи інші id, наприклад підказку поля). */
+export function describedBy(el, id, on) {
+  if (!el || !id) return;
+  const ids = (el.getAttribute('aria-describedby') || '').split(/\s+/).filter((x) => x && x !== id);
+  if (on) ids.push(id);
+  if (ids.length) el.setAttribute('aria-describedby', ids.join(' '));
+  else el.removeAttribute('aria-describedby');
+}
+
+/** Телефон / планшет (сенсорний екран) або вузьке вікно — там пропонуємо «натиснути», а не «перетягнути». */
+export const isTouch = () => typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse), (max-width: 720px)').matches;
+
 export const clone = (value) => (value === undefined ? undefined : JSON.parse(JSON.stringify(value)));
 
 export const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -102,17 +141,33 @@ const dateTimeFmt = new Intl.DateTimeFormat('uk-UA', {
 });
 const timeFmt = new Intl.DateTimeFormat('uk-UA', { hour: '2-digit', minute: '2-digit' });
 
-/** «сьогодні о 14:05», «вчора о 09:12», «3 жовтня 2026 р. о 18:40» */
-export function formatDate(iso) {
+const timeSecFmt = new Intl.DateTimeFormat('uk-UA', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const dateTimeSecFmt = new Intl.DateTimeFormat('uk-UA', {
+  day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit',
+});
+
+/**
+ * «сьогодні о 14:05», «учора о 09:12», «3 жовтня 2026 р. о 18:40».
+ * afterVowel: true — для середини речення після голосного («на вчора о…»): у ↔ в за правилом милозвучності.
+ * seconds: true — з секундами (щоб розрізнити кілька подій за одну хвилину).
+ */
+export function formatDate(iso, { afterVowel = false, seconds = false } = {}) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
   const today = new Date();
   const startOfDay = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const diffDays = Math.round((startOfDay(today) - startOfDay(d)) / 86400000);
-  if (diffDays === 0) return `сьогодні о ${timeFmt.format(d)}`;
-  if (diffDays === 1) return `вчора о ${timeFmt.format(d)}`;
-  return dateTimeFmt.format(d);
+  const time = (seconds ? timeSecFmt : timeFmt).format(d);
+  if (diffDays === 0) return `сьогодні о ${time}`;
+  if (diffDays === 1) return `${afterVowel ? 'вчора' : 'учора'} о ${time}`;
+  return (seconds ? dateTimeSecFmt : dateTimeFmt).format(d);
 }
+
+/** Лише час «14:05». */
+export const formatTime = (iso) => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : timeFmt.format(d);
+};
 
 /** Правильна форма слова після числа: plural(5, ['заявка', 'заявки', 'заявок']) */
 export function plural(n, forms) {

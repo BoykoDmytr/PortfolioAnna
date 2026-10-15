@@ -1,7 +1,9 @@
 'use strict';
 
 /**
- * buildViewModel(content, lang, { basePath, isStatic, leadStatus }) → локальні змінні для views/index.ejs.
+ * buildViewModel(content, lang, { basePath, isStatic, leadStatus, origin }) → локальні змінні для views/index.ejs.
+ * origin — адреса, з якої відкрито сторінку ('https://example.com'); потрібна для абсолютних
+ * посилань (og:image, hreflang, canonical), коли в SEO не вказано «Адресу сайту».
  * Контракт описано в SPEC.md («View-model contract»). Шаблони не мають знати про структуру
  * content.json більше, ніж потрібно: тексти через t()/u(), шляхи через asset()/img(), іконки через icon().
  */
@@ -11,7 +13,8 @@ const { normalizeBasePath } = require('./config');
 
 const PRIMARY_LANG = LANG_CODES[0];
 const COLOR_RE = /^#[0-9a-f]{6}$/i;
-const OG_LOCALES = { uk: 'uk_UA', en: 'en_US' };
+const OG_LOCALES = { uk: 'uk_UA', en: 'en_GB' };
+const ORIGIN_RE = /^https?:\/\/(\[[0-9a-f:.]+\]|[a-z0-9._-]+)(:\d{1,5})?$/i;
 const MESSENGERS = [
   ['telegram', 'writeTelegram'],
   ['viber', 'writeViber'],
@@ -54,21 +57,24 @@ function emptySvg(cls) {
 
 const langPath = (code) => (code === PRIMARY_LANG ? '/' : `/${code}/`);
 
-/** '+380 67 123-45-67' → '+380671234567' (лише цифри і початковий +) */
+/**
+ * '+380 67 123-45-67' → '+380671234567' (лише цифри і початковий +).
+ * Український номер без коду країни ('067 123 45 67', '380 67 …') → '+380…',
+ * щоб посилання tel: працювало і з іноземної SIM-картки.
+ */
 function dialable(value) {
   const s = String(value || '').trim();
   const digits = s.replace(/\D/g, '');
   if (!digits) return '';
-  return (s.startsWith('+') ? '+' : '') + digits;
+  if (s.startsWith('+')) return `+${digits}`;
+  if (/^0\d{9}$/.test(digits)) return `+38${digits}`;
+  if (/^380\d{9}$/.test(digits)) return `+${digits}`;
+  return digits;
 }
 
 /** Номер для Viber у міжнародному форматі без '+': '067 123 45 67' → '380671234567' */
 function viberNumber(value) {
-  const d = dialable(value);
-  if (!d) return '';
-  let digits = d.replace(/^\+/, '');
-  if (!d.startsWith('+') && /^0\d{9}$/.test(digits)) digits = `38${digits}`; // український номер без коду країни
-  return digits;
+  return dialable(value).replace(/^\+/, '');
 }
 
 function buildLinks(contacts) {
@@ -169,22 +175,26 @@ function buildViewModel(content, lang, options = {}) {
     ? `--accent:${theme.accent.toLowerCase()};--bg:${theme.background.toLowerCase()};`
     : '';
 
-  // SEO: абсолютні адреси — лише якщо відома адреса сайту
+  // SEO: абсолютні адреси (Google вимагає їх для hreflang, а Telegram/Viber/Facebook — для og:image).
+  // «Адреса сайту» з SEO (вона вже містить можливу підпапку); якщо її не вказано — адреса, з якої
+  // відкрито сторінку (сервер), і лише в статичному експорті без адреси — відносні шляхи.
   const siteUrl = typeof seo.siteUrl === 'string' && /^https?:\/\/[^\s]+$/i.test(seo.siteUrl) ? seo.siteUrl.replace(/\/+$/, '') : '';
+  const origin = typeof options.origin === 'string' && ORIGIN_RE.test(options.origin) ? options.origin.toLowerCase() : '';
+  const absoluteBase = siteUrl || (origin ? `${origin}${basePath}` : '');
   const pageHref = (code) => `${basePath}${langPath(code)}`;
-  const absolute = (p) => (siteUrl ? `${siteUrl}${p}` : `${basePath}${p}`);
+  const absolute = (p) => (absoluteBase ? `${absoluteBase}${p}` : `${basePath}${p}`);
   const hero = allSections.hero || {};
   const ogSource = seo.ogImage || hero.image || '';
   let ogImage = '';
   if (/^https:\/\//i.test(ogSource)) ogImage = ogSource;
-  else if (img(ogSource)) ogImage = siteUrl ? `${siteUrl}${ogSource}` : img(ogSource);
+  else if (img(ogSource)) ogImage = absoluteBase ? `${absoluteBase}${ogSource}` : img(ogSource);
 
   const fullBrand = [brand.name, brand.tagline].filter(Boolean).join(' ');
   const meta = {
     title: t(seo.title) || fullBrand,
     description: t(seo.description),
     ogImage,
-    canonical: siteUrl ? `${siteUrl}${langPath(L)}` : '',
+    canonical: absoluteBase ? `${absoluteBase}${langPath(L)}` : '',
     alternates: [
       ...LANG_CODES.map((code) => ({ hreflang: code, href: absolute(langPath(code)) })),
       { hreflang: 'x-default', href: absolute(langPath(PRIMARY_LANG)) },

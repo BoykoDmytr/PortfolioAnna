@@ -3,7 +3,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { sanitizeContent } = require('../src/validate');
-const { buildViewModel, viberNumber } = require('../src/view-model');
+const { buildViewModel, viberNumber, dialable } = require('../src/view-model');
 
 function fixture(patch = {}) {
   const { content } = sanitizeContent({
@@ -100,6 +100,16 @@ test('links і messengers за контрактом', () => {
 
   assert.equal(viberNumber('067 123 45 67'), '380671234567', 'український номер без коду країни');
   assert.equal(viberNumber('+48 600 000 000'), '48600000000');
+  // tel: для номера без коду країни — з +380, щоб дзвінок працював і з іноземної SIM
+  assert.equal(dialable('067 123 45 67'), '+380671234567');
+  assert.equal(dialable('(067) 123-45-67'), '+380671234567');
+  assert.equal(dialable('380 67 123 45 67'), '+380671234567');
+  assert.equal(dialable('+48 600 000 000'), '+48600000000');
+  assert.equal(dialable('600 000 000'), '600000000', 'невідомий формат — як є');
+  assert.equal(dialable(''), '');
+  const local = buildViewModel(fixture({ contacts: { phone: '067 123 45 67' } }), 'uk');
+  assert.equal(local.links.phone.href, 'tel:+380671234567');
+  assert.equal(local.links.phone.display, '067 123 45 67');
 });
 
 test('sections, section(), nav', () => {
@@ -131,6 +141,27 @@ test('brand, agency, тема', () => {
   assert.equal(custom.themePreset, 'custom');
   assert.equal(custom.themeStyle, '--accent:#aa5500;--bg:#fafafa;');
   assert.equal(buildViewModel(fixture({ theme: { preset: 'sea', accent: '#000000' } }), 'uk').themeStyle, '');
+});
+
+test('meta: без адреси сайту, але з адресою запиту (сервер) — абсолютні посилання', () => {
+  const vm = buildViewModel(fixture(), 'en', { origin: 'http://192.168.1.23:3000' });
+  assert.equal(vm.meta.canonical, 'http://192.168.1.23:3000/en/');
+  assert.equal(vm.meta.ogImage, 'http://192.168.1.23:3000/uploads/og-image.jpg');
+  assert.deepEqual(vm.meta.alternates, [
+    { hreflang: 'uk', href: 'http://192.168.1.23:3000/' },
+    { hreflang: 'en', href: 'http://192.168.1.23:3000/en/' },
+    { hreflang: 'x-default', href: 'http://192.168.1.23:3000/' },
+  ]);
+  const sub = buildViewModel(fixture(), 'uk', { origin: 'https://Example.org', basePath: '/site' });
+  assert.equal(sub.meta.canonical, 'https://example.org/site/');
+  assert.equal(sub.meta.ogImage, 'https://example.org/site/uploads/og-image.jpg');
+  // «Адреса сайту» з SEO важливіша за адресу запиту
+  const both = buildViewModel(fixture({ seo: { siteUrl: 'https://annafrolova.travel', ogImage: '/uploads/og-image.jpg' } }), 'uk', { origin: 'http://localhost:3000' });
+  assert.equal(both.meta.canonical, 'https://annafrolova.travel/');
+  // Підозріла адреса (ін'єкція в Host) ігнорується
+  for (const origin of ['http://evil"><script>', 'javascript:alert(1)', 'http://a b', 'ftp://x']) {
+    assert.equal(buildViewModel(fixture(), 'uk', { origin }).meta.canonical, '', origin);
+  }
 });
 
 test('meta: без адреси сайту — відносні посилання', () => {

@@ -16,8 +16,16 @@ const crypto = require('crypto');
 const multer = require('multer');
 const sharp = require('sharp');
 const { writeFileAtomic } = require('./content-store');
+const { createSemaphore } = require('./limits');
 
 const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
+// Не більше 80 мегапікселів (напр. 10 300 × 7 750): з запасом для фото з телефонів 48–64 Мп,
+// але без «бомб» на кшталт PNG 16 000 × 16 000, що важить менше 1 МБ, а в пам'яті займає сотні МБ.
+// (Ще більші фото адмінка сама зменшує в браузері перед завантаженням.)
+const MAX_INPUT_PIXELS = 80_000_000;
+const TOO_MANY_PIXELS = 'Фото має завелику роздільність (понад 80 мегапікселів). Надішліть його собі в Telegram як фото (не файлом), збережіть звідти й завантажте ще раз — так воно стане меншим.';
+// Обробка фото важка для пам'яті й процесора: одночасно не більше двох, решта чекає в черзі.
+const processing = createSemaphore({ max: 2 });
 const ALLOWED_FORMATS = new Set(['jpeg', 'png', 'webp', 'gif', 'avif']);
 const MEDIA_EXT_RE = /\.(webp|png|jpe?g|gif|avif|svg)$/i;
 const MEDIA_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
@@ -122,6 +130,10 @@ class MediaStore {
     if (!ALLOWED_FORMATS.has(format)) {
       throw httpError(415, 'Непідтримуваний формат. Завантажте фото у форматі JPG, PNG, WebP, AVIF або GIF.');
     }
+    // Розміри з заголовка файлу — ще до розпакування самого зображення (анімація: лише перший кадр)
+    if ((meta.width || 0) * (meta.pageHeight || meta.height || 0) > MAX_INPUT_PIXELS) {
+      throw httpError(413, TOO_MANY_PIXELS);
+    }
     return { format, meta };
   }
 
@@ -146,19 +158,20 @@ class MediaStore {
     if (!preset) throw httpError(400, 'Невідоме призначення файлу.');
     if (!buffer || !buffer.length) throw httpError(400, 'Файл порожній.');
 
-    await this.detectFormat(buffer);
-
-    let output;
-    try {
-      output = await sharp(buffer, { failOn: 'error' })
-        .rotate()
-        .resize({ width: preset.maxSize, height: preset.maxSize, fit: 'inside', withoutEnlargement: true })
-        .webp(preset.webp)
-        .toBuffer({ resolveWithObject: true });
-    } catch (err) {
-      this.logger.warn(`Не вдалося обробити зображення: ${err.message}`);
-      throw httpError(415, 'Не вдалося обробити зображення — можливо, файл пошкоджений. Спробуйте інше фото.');
-    }
+    const output = await processing.run(async () => {
+      await this.detectFormat(buffer);
+      try {
+        return await sharp(buffer, { failOn: 'error', limitInputPixels: MAX_INPUT_PIXELS })
+          .rotate()
+          .resize({ width: preset.maxSize, height: preset.maxSize, fit: 'inside', withoutEnlargement: true })
+          .webp(preset.webp)
+          .toBuffer({ resolveWithObject: true });
+      } catch (err) {
+        if (/pixel limit/i.test(err.message)) throw httpError(413, TOO_MANY_PIXELS);
+        this.logger.warn(`Не вдалося обробити зображення: ${err.message}`);
+        throw httpError(415, 'Не вдалося обробити зображення — можливо, файл пошкоджений. Спробуйте інше фото.');
+      }
+    });
 
     await fsp.mkdir(this.uploadsDir, { recursive: true });
     const name = await this.uniqueName(slugify(originalName));

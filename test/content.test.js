@@ -7,7 +7,8 @@ const os = require('os');
 const path = require('path');
 const { createApp } = require('../src/app');
 const { startServer, createClient, readJson, SEED_DATA_DIR } = require('./helpers');
-const { sanitizeContent } = require('../src/validate');
+const { sanitizeContent, pluralUk, charsAtMost, charsAtLeast } = require('../src/validate');
+const { changedUnits } = require('../src/content-store');
 const { ICON_NAMES, SECTION_TYPES } = require('../src/schema');
 
 let ctx;
@@ -89,7 +90,7 @@ test('PUT без змін не створює зайвої резервної к
   assert.equal(listBackupFiles().length, count);
 });
 
-test('PUT з невірним телефоном → 422 з details, нічого не збережено', async () => {
+test('PUT з неправильним телефоном → 422 з details, нічого не збережено', async () => {
   const current = (await client.get('/admin/api/content')).data;
   const onDisk = fs.readFileSync(contentFile, 'utf8');
   const bad = clone(current);
@@ -103,6 +104,62 @@ test('PUT з невірним телефоном → 422 з details, нічог�
   assert.ok(paths.includes('sections.reviews.items.0.text.uk'), JSON.stringify(res.data.details));
   for (const d of res.data.details) assert.equal(typeof d.message, 'string');
   assert.equal(fs.readFileSync(contentFile, 'utf8'), onDisk);
+});
+
+test('повідомлення про довжину — з правильною формою множини («4 символи», не «4 символів»)', async () => {
+  const current = (await client.get('/admin/api/content')).data;
+  const bad = clone(current);
+  bad.sections.certificates.items[0].year = '2024р';
+  bad.contacts.phone = '12';
+  const res = await client.put('/admin/api/content', { json: bad });
+  assert.equal(res.status, 422);
+  const year = res.data.details.find((d) => d.path === 'sections.certificates.items.0.year');
+  assert.equal(year.message, 'Задовгий текст: не більше 4 символів');
+  assert.ok(res.data.details.every((d) => !/Невірн/.test(d.message)), 'без «невірний»');
+  const phone = res.data.details.find((d) => d.path === 'contacts.phone');
+  assert.equal(phone.message, 'Неправильний формат');
+
+  assert.equal(pluralUk(1, ['символ', 'символи', 'символів']), 'символ');
+  assert.equal(pluralUk(4, ['символ', 'символи', 'символів']), 'символи');
+  assert.equal(pluralUk(12, ['символ', 'символи', 'символів']), 'символів');
+  assert.equal(pluralUk(22, ['символ', 'символи', 'символів']), 'символи');
+  assert.equal(pluralUk(300, ['символ', 'символи', 'символів']), 'символів');
+  assert.equal(charsAtMost(1), 'не більше 1 символу');
+  assert.equal(charsAtMost(21), 'не більше 21 символу');
+  assert.equal(charsAtMost(11), 'не більше 11 символів');
+  assert.equal(charsAtMost(4), 'не більше 4 символів');
+  assert.equal(charsAtLeast(2), 'щонайменше 2 символи');
+  assert.equal(charsAtLeast(8), 'щонайменше 8 символів');
+});
+
+test('X-Content-Revision / If-Match: збереження з іншого пристрою не затирається мовчки', async () => {
+  const first = await client.get('/admin/api/content');
+  const rev = first.headers.get('x-content-revision');
+  assert.match(rev, /^[0-9a-f]{20}$/);
+  assert.equal((await client.get('/admin/api/content')).headers.get('x-content-revision'), rev, 'стабільний, поки вміст не змінився');
+
+  // «Ноутбук» зберігає з If-Match → успіх і новий відбиток
+  const laptop = clone(first.data);
+  laptop.settings.footerText = { uk: 'Ноутбук', en: 'Laptop' };
+  const saved = await client.put('/admin/api/content', { json: laptop, headers: { 'if-match': rev } });
+  assert.equal(saved.status, 200);
+  const rev2 = saved.headers.get('x-content-revision');
+  assert.ok(rev2 && rev2 !== rev);
+
+  // «Телефон» відкрив адмінку раніше (старий відбиток) → 412, нічого не збережено
+  const onDisk = fs.readFileSync(contentFile, 'utf8');
+  const phone = clone(first.data);
+  phone.contacts.city = { uk: 'Львів', en: 'Lviv' };
+  const stale = await client.put('/admin/api/content', { json: phone, headers: { 'if-match': `"${rev}"` } });
+  assert.equal(stale.status, 412);
+  assert.match(stale.data.error, /іншому пристрої/);
+  assert.equal(stale.headers.get('x-content-revision'), rev2);
+  assert.equal(fs.readFileSync(contentFile, 'utf8'), onDisk);
+
+  // Без If-Match (старі клієнти, імпорт) — як раніше
+  const plain = await client.put('/admin/api/content', { json: (await client.get('/admin/api/content')).data });
+  assert.equal(plain.status, 200);
+  assert.equal((await client.put('/admin/api/content', { json: plain.data.content, headers: { 'if-match': '*' } })).status, 200);
 });
 
 test('PUT з тілом, що не є контентом → 400; зіпсований JSON → 400', async () => {
@@ -165,6 +222,21 @@ test('резервні копії: список і відновлення', asyn
   const download = await client.get(`/admin/api/backups/${oldest.name}`);
   assert.equal(download.status, 200);
   assert.match(download.headers.get('content-disposition'), /^attachment;/);
+});
+
+test('резервні копії: підпис «що змінилося після неї»', async () => {
+  const current = (await client.get('/admin/api/content')).data;
+  const next = clone(current);
+  next.contacts.hours = { uk: 'Пн–Пт 10:00–18:00', en: 'Mon–Fri 10:00–18:00' };
+  next.sections.faq.title = { uk: 'Питання', en: 'FAQ' };
+  assert.equal((await client.put('/admin/api/content', { json: next })).status, 200);
+  const [newest] = (await client.get('/admin/api/backups')).data;
+  assert.deepEqual(newest.changes, ['contacts', 'sections.faq']);
+
+  assert.deepEqual(changedUnits(current, current), []);
+  const reordered = clone(current);
+  reordered.order = [...current.order].reverse();
+  assert.deepEqual(changedUnits(current, reordered), ['order']);
 });
 
 test('резервні копії: недопустимі назви', async () => {
