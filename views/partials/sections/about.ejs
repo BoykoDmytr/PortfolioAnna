@@ -1,0 +1,43 @@
+<%
+  const photo = img(s.photo);
+  const stats = (s.stats || []).filter((st) => st.value || t(st.label));
+  const textParas = paras(s.text);
+-%>
+<section id="about" class="section section--about section--<%= tone %>"<% if (t(s.title)) { %> aria-labelledby="about-title"<% } %>>
+  <div class="container">
+    <div class="about<%= photo ? '' : ' about--no-photo' %>">
+<% if (photo) { -%>
+      <div class="about__media" data-reveal>
+        <div class="arch">
+          <img class="arch__img" src="<%= photo %>" alt="<%= kit.plain(s.signature || t(s.title) || brand.name) %>" loading="lazy" decoding="async">
+        </div>
+        <span class="about__frame" aria-hidden="true"></span>
+        <%- kit.mark('about__mark') %>
+      </div>
+<% } -%>
+      <div class="about__body">
+<%- include('../section-head', { s, id: 'about', align: 'left' }) %>
+<% if (textParas.length) { -%>
+        <div class="prose" data-reveal style="--d: 1">
+<% textParas.forEach((p, i) => { -%>
+          <p<% if (i === 0) { %> class="prose__first"<% } %>><%= p %></p>
+<% }) -%>
+        </div>
+<% } -%>
+<% if (s.signature) { -%>
+        <p class="signature" data-reveal style="--d: 2"><%= s.signature %></p>
+<% } -%>
+      </div>
+    </div>
+<% if (stats.length) { -%>
+    <ul class="stats stats--<%= stats.length %>">
+<% stats.forEach((st, i) => { -%>
+      <li class="stats__item" data-reveal style="--d: <%= i %>">
+        <span class="stats__value"><%= st.value %></span>
+        <span class="stats__label"><%= t(st.label) %></span>
+      </li>
+<% }) -%>
+    </ul>
+<% } -%>
+  </div>
+</section>

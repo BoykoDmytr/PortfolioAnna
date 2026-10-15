@@ -1,0 +1,62 @@
+<%
+  const footerParas = paras(settings.footerText);
+  const brandLine = [brand.name, brand.tagline].filter(Boolean).join(' ');
+-%>
+<footer class="site-footer">
+  <div class="container">
+    <div class="site-footer__top">
+      <div class="site-footer__brand">
+        <a class="footer-brand" href="<%= kit.homeHref %>" aria-label="<%= brandLine || 'Home' %> — <%= kit.L.home %>">
+<% if (brand.logo) { -%>
+          <img class="footer-brand__logo" src="<%= brand.logo %>" alt="" loading="lazy" decoding="async">
+<% } else { -%>
+          <%- kit.mark('footer-brand__mark') %>
+<% } -%>
+<% if (brand.name) { -%>
+          <span class="footer-brand__word" aria-hidden="true">
+            <span class="footer-brand__name"><%= brand.name %></span>
+<% if (brand.tagline) { -%>
+            <span class="footer-brand__tagline"><%= brand.tagline %></span>
+<% } -%>
+          </span>
+<% } -%>
+        </a>
+<% footerParas.forEach((p) => { -%>
+        <p class="site-footer__text"><%= p %></p>
+<% }) -%>
+<% if (agency) { -%>
+        <p class="site-footer__agency"><%- include('wave', { waveCls: 'site-footer__wave' }) %><span><%= agency %></span></p>
+<% } -%>
+      </div>
+
+<% if (kit.navItems.length) { -%>
+      <nav class="site-footer__nav" aria-label="<%= kit.L.footerNav %>">
+        <ul>
+<% kit.navItems.forEach((item) => { -%>
+          <li><a href="#<%= item.id %>"><%= item.label %></a></li>
+<% }) -%>
+        </ul>
+      </nav>
+<% } -%>
+
+<% if (messengers.length || links.email) { -%>
+      <div class="site-footer__contact">
+        <ul class="site-footer__links">
+<% messengers.forEach((m) => { -%>
+          <li><a href="<%= m.href %>"<% if (/^https:/.test(m.href)) { %> target="_blank" rel="noopener"<% } %>><%- icon(m.key) %><span><%= m.display %></span></a></li>
+<% }) -%>
+<% if (links.email) { -%>
+          <li><a href="<%= links.email.href %>"><%- icon('mail') %><span><%= links.email.display %></span></a></li>
+<% } -%>
+        </ul>
+      </div>
+<% } -%>
+    </div>
+
+    <div class="site-footer__bottom">
+      <p class="site-footer__copy">© <%= year %> <%= brandLine %><% if (u('rights')) { %> · <%= u('rights') %><% } %></p>
+<%- include('lang-switch', { kit, switchCls: 'lang-switch lang-switch--footer' }) %>
+      <a class="to-top" href="#main" data-to-top><span><%= kit.ui('backToTop') %></span><%- icon('arrow-up') %></a>
+    </div>
+  </div>
+</footer>

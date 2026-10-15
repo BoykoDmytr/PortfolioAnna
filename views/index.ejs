@@ -1,0 +1,85 @@
+<%
+  // ——— Спільні помічники для частин шаблону (передаються в include як `kit`) ———
+  const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&#34;', "'": '&#39;' })[c]);
+  // *слово* у заголовках → елегантний курсив (текст спершу екранується)
+  const emph = (v) => esc(v).replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+  const plain = (v) => String(v == null ? '' : v).replace(/\*([^*\n]+)\*/g, '$1');
+  const en = lang === 'en';
+  const L = en ? {
+    skip: 'Skip to content', home: 'home page', mainNav: 'Main navigation', language: 'Language',
+    rating: (n) => `Rated ${n} out of 5`, openPhoto: 'Open photo', scroll: 'Scroll down',
+    phone: 'Phone', email: 'Email', city: 'City', hours: 'Hours', required: 'required',
+    messengers: 'Message me', footerNav: 'Site sections', reviewsList: 'Reviews', photoOf: 'Photo',
+  } : {
+    skip: 'Перейти до змісту', home: 'головна сторінка', mainNav: 'Головне меню', language: 'Мова сайту',
+    rating: (n) => `Оцінка ${n} з 5`, openPhoto: 'Відкрити фото', scroll: 'Гортайте донизу',
+    phone: 'Телефон', email: 'Email', city: 'Місто', hours: 'Графік', required: 'обов’язкове поле',
+    messengers: 'Напишіть мені', footerNav: 'Розділи сайту', reviewsList: 'Відгуки', photoOf: 'Фото',
+  };
+
+  // Секції без вмісту не показуємо (і не ведемо на них з меню)
+  const hasItems = (d, pred) => Array.isArray(d.items) && d.items.some(pred);
+  const renderable = {
+    hero: () => true,
+    about: (d) => !!(t(d.title) || t(d.text) || d.photo || (d.stats && d.stats.length)),
+    services: (d) => hasItems(d, (i) => t(i.title) || t(i.text)),
+    destinations: (d) => hasItems(d, (i) => t(i.name) || i.image),
+    process: (d) => hasItems(d, (i) => t(i.title) || t(i.text)),
+    gallery: (d) => hasItems(d, (i) => img(i.image)),
+    reviews: (d) => hasItems(d, (i) => t(i.text)),
+    certificates: (d) => hasItems(d, (i) => t(i.title) || i.image),
+    faq: (d) => hasItems(d, (i) => t(i.question)),
+    contact: (d) => !!(messengers.length || formEnabled || t(d.title) || t(d.text)),
+  };
+  const shown = sections.filter((s) => (renderable[s.type] ? renderable[s.type](s.data) : false));
+  const shownTypes = shown.map((s) => s.type);
+  const navItems = nav.filter((n) => shownTypes.includes(n.id));
+  const hasHero = shownTypes[0] === 'hero';
+  const homeHref = (langs.find((l) => l.active) || langs[0] || { href: '/' }).href;
+  // Монограма AF (partials/monogram.ejs). Якщо частини раптом немає — проста резервна лінія,
+  // щоб сторінка все одно відкрилася.
+  const mark = (cls) => {
+    try {
+      return include('partials/monogram', { cls });
+    } catch (err) {
+      return `<svg class="${esc(cls)}" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M21 56 33.5 7l8.5 33"/><path d="M8 37c9-8 18-8 26-4s16 9 22 1"/><path d="M33.5 36v20M33.5 45h10"/></svg>`;
+    }
+  };
+  // Резервні підписи інтерфейсу — на випадок, якщо поле в «Текстах інтерфейсу» залишили порожнім
+  const UI_FALLBACK = en ? {
+    formName: 'Your name', formContact: 'Phone or Telegram', formDestination: 'Where would you like to go',
+    formDates: 'Dates', formTravelers: 'Travellers', formMessage: 'Wishes', formSubmit: 'Send request',
+    formSending: 'Sending…', formSuccess: 'Thank you! I will get back to you soon.',
+    formError: 'Could not send the request. Please try again or message me directly.',
+    contactMe: 'Contact me', menu: 'Menu', close: 'Close', prev: 'Previous', next: 'Next', backToTop: 'Back to top',
+  } : {
+    formName: 'Ваше ім’я', formContact: 'Телефон або Telegram', formDestination: 'Куди хочете поїхати',
+    formDates: 'Дати', formTravelers: 'Скільки вас', formMessage: 'Побажання', formSubmit: 'Надіслати заявку',
+    formSending: 'Надсилаю…', formSuccess: 'Дякую! Я зв’яжуся з вами найближчим часом.',
+    formError: 'Не вдалося надіслати заявку. Спробуйте ще раз або напишіть мені в месенджер.',
+    contactMe: 'Зв’язатися зі мною', menu: 'Меню', close: 'Закрити', prev: 'Попередній', next: 'Наступний', backToTop: 'Нагору',
+  };
+  const uiText = (key) => u(key) || UI_FALLBACK[key] || '';
+  const kit = { esc, emph, plain, L, navItems, shownTypes, homeHref, mark, ui: uiText };
+-%>
+<!doctype html>
+<html lang="<%= htmlLang %>" data-theme="<%= themePreset %>"<% if (themeStyle) { %> style="<%= themeStyle %>"<% } %> class="no-js<%= hasHero ? ' has-hero' : '' %>">
+<head>
+<%- include('partials/head', { kit }) %>
+</head>
+<body>
+  <a class="skip-link" href="#main"><%= L.skip %></a>
+<%- include('partials/header', { kit }) %>
+  <main id="main" tabindex="-1">
+<% if (!hasHero) { %>
+    <h1 class="visually-hidden"><%= meta.title || brand.name %></h1>
+<% } -%>
+<% shown.forEach((s, i) => { -%>
+<%- include('partials/sections/' + s.type, { s: s.data, kit, tone: (i % 2 === 0) ? 'base' : 'alt', index: i }) %>
+<% }) -%>
+  </main>
+<%- include('partials/footer', { kit }) %>
+<%- include('partials/floating-contact', { kit }) %>
+<%- include('partials/lightbox', { kit }) %>
+</body>
+</html>

@@ -1,0 +1,56 @@
+<%
+  const items = (s.items || []).filter((it) => t(it.text));
+  // Ініціали: перші літери двох слів, пропускаючи сполучники («Олена та Андрій» → «ОА», «Olena & Andriy» → «OA»)
+  const JOINERS = ['та', 'і', 'й', 'и', 'and', '&', '+'];
+  const initials = (name) => String(name || '').trim().split(/\s+/)
+    .filter((w) => w && !JOINERS.includes(w.toLowerCase()))
+    .slice(0, 2).map((w) => w.charAt(0)).join('').toUpperCase();
+-%>
+<section id="reviews" class="section section--reviews section--<%= tone %>"<% if (t(s.title)) { %> aria-labelledby="reviews-title"<% } %>>
+  <div class="container">
+    <div class="reviews__head">
+<%- include('../section-head', { s, id: 'reviews', align: 'left' }) %>
+<% if (items.length > 1) { -%>
+      <div class="carousel-nav" data-carousel-nav hidden>
+        <button class="round-btn" type="button" data-carousel-prev aria-controls="reviews-track" aria-label="<%= kit.ui('prev') %>"><%- icon('arrow-left') %></button>
+        <span class="carousel-nav__count" data-carousel-count aria-hidden="true"></span>
+        <button class="round-btn" type="button" data-carousel-next aria-controls="reviews-track" aria-label="<%= kit.ui('next') %>"><%- icon('arrow-right') %></button>
+      </div>
+<% } -%>
+    </div>
+  </div>
+  <div class="reviews__viewport" data-carousel>
+    <ul class="reviews__track" id="reviews-track" tabindex="0" aria-label="<%= kit.L.reviewsList %>" data-carousel-track>
+<% items.forEach((it, i) => { const rating = Math.max(1, Math.min(5, Number(it.rating) || 5)); const photo = img(it.photo); const name = t(it.name); -%>
+      <li class="review" data-reveal style="--d: <%= Math.min(i, 3) %>">
+        <figure class="review__card">
+          <div class="review__top">
+            <%- icon('quote', 'icon review__quote') %>
+            <span class="review__stars" role="img" aria-label="<%= kit.L.rating(rating) %>"><% for (let k = 1; k <= 5; k++) { %><%- icon('star', k <= rating ? 'icon star is-on' : 'icon star') %><% } %></span>
+          </div>
+          <blockquote class="review__text">
+<% paras(it.text).forEach((p) => { -%>
+            <p><%= p %></p>
+<% }) -%>
+          </blockquote>
+          <figcaption class="review__author">
+<% if (photo) { -%>
+            <img class="review__photo" src="<%= photo %>" alt="" loading="lazy" decoding="async" width="56" height="56">
+<% } else { -%>
+            <span class="review__initials" aria-hidden="true"><%= initials(name) %></span>
+<% } -%>
+            <span class="review__who">
+<% if (name) { -%>
+              <span class="review__name"><%= name %></span>
+<% } -%>
+<% if (t(it.trip)) { -%>
+              <span class="review__trip"><%= t(it.trip) %></span>
+<% } -%>
+            </span>
+          </figcaption>
+        </figure>
+      </li>
+<% }) -%>
+    </ul>
+  </div>
+</section>

@@ -1,0 +1,45 @@
+<%
+  const hero = kit.shownTypes.includes('hero') ? section('hero') : null;
+  const heroImg = hero ? img(hero.image) : '';
+  const pageTitle = meta.title || [brand.name, brand.tagline].filter(Boolean).join(' ');
+-%>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title><%= pageTitle %></title>
+<% if (meta.description) { -%>
+  <meta name="description" content="<%= meta.description %>">
+<% } -%>
+<% if (meta.canonical) { -%>
+  <link rel="canonical" href="<%= meta.canonical %>">
+<% } -%>
+<% (meta.alternates || []).forEach((a) => { -%>
+  <link rel="alternate" hreflang="<%= a.hreflang %>" href="<%= a.href %>">
+<% }) -%>
+  <meta name="theme-color" content="#f8f4ef">
+  <meta name="format-detection" content="telephone=no">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="<%= [brand.name, brand.tagline].filter(Boolean).join(' ') %>">
+  <meta property="og:title" content="<%= pageTitle %>">
+<% if (meta.description) { -%>
+  <meta property="og:description" content="<%= meta.description %>">
+<% } -%>
+  <meta property="og:locale" content="<%= meta.locale || (lang === 'en' ? 'en_US' : 'uk_UA') %>">
+<% (meta.localeAlternates || []).forEach((loc) => { -%>
+  <meta property="og:locale:alternate" content="<%= loc %>">
+<% }) -%>
+<% if (meta.canonical) { -%>
+  <meta property="og:url" content="<%= meta.canonical %>">
+<% } -%>
+<% if (meta.ogImage) { -%>
+  <meta property="og:image" content="<%= meta.ogImage %>">
+  <meta name="twitter:card" content="summary_large_image">
+<% } -%>
+  <link rel="icon" href="<%= asset('/assets/img/favicon.svg') %>" type="image/svg+xml">
+  <link rel="icon" href="<%= asset('/assets/img/favicon-32.png') %>" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="<%= asset('/assets/img/apple-touch-icon.png') %>">
+<% if (heroImg) { -%>
+  <link rel="preload" href="<%= heroImg %>" as="image" fetchpriority="high">
+<% } -%>
+  <link rel="stylesheet" href="<%= asset('/assets/css/fonts.css') %>">
+  <link rel="stylesheet" href="<%= asset('/assets/css/site.css') %>">
+  <script src="<%= asset('/assets/js/site.js') %>" defer></script>

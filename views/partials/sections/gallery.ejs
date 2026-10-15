@@ -1,0 +1,20 @@
+<%
+  const items = (s.items || []).filter((it) => img(it.image));
+-%>
+<section id="gallery" class="section section--gallery section--<%= tone %>"<% if (t(s.title)) { %> aria-labelledby="gallery-title"<% } %>>
+  <div class="container">
+<%- include('../section-head', { s, id: 'gallery', align: 'center' }) %>
+    <ul class="gallery gallery--<%= Math.min(items.length, 9) %>">
+<% items.forEach((it, i) => { const cap = t(it.caption); -%>
+      <li class="gallery__cell" data-reveal style="--d: <%= i % 3 %>">
+        <a class="gallery__item" href="<%= img(it.image) %>" data-lightbox="gallery" data-caption="<%= cap %>" aria-label="<%= cap ? kit.L.openPhoto + ': ' + cap : kit.L.openPhoto %>">
+          <img class="gallery__img" src="<%= img(it.image) %>" alt="<%= cap %>" loading="lazy" decoding="async">
+<% if (cap) { -%>
+          <span class="gallery__caption" aria-hidden="true"><%= cap %></span>
+<% } -%>
+        </a>
+      </li>
+<% }) -%>
+    </ul>
+  </div>
+</section>

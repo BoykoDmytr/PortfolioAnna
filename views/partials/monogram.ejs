@@ -1,0 +1,6 @@
+<%# Монограма AF (ANNA FROLOVA TRAVEL): лінійний знак, колір = currentColor.
+    Використання: include('partials/monogram', { cls: 'brand__mark' }).
+    Розмір задавайте в CSS (width/height); товщину ліній — CSS-властивістю stroke-width
+    (за замовчуванням 1.5; для розмірів до 48 px — 1.8–2.2) або параметром sw. -%>
+<% const _sw = Number(locals.sw) > 0 && Number(locals.sw) <= 6 ? Number(locals.sw) : 1.5; -%>
+<svg class="<%= locals.cls || 'monogram' %>" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 116.6" fill="none" stroke="currentColor" stroke-width="<%= _sw %>" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M40.45 45.7L55.05 1.3L75.65 60.8"/><path d="M55.05 1.3Q69.09 43.08 75.65 60.8Q71.83 42.13 55.05 1.3ZM55.05 1.3Q69.28 43.02 75.65 60.8Q70.65 42.54 55.05 1.3ZM55.05 1.3L75.65 60.8"/><path d="M39.05 51.5Q32.45 69.83 25.85 95.9Q34.37 70.4 39.05 51.5ZM39.05 51.5Q32.98 69.99 25.85 95.9Q33.94 70.28 39.05 51.5ZM39.05 51.5L25.85 95.9"/><path d="M1.45 60.3C10.25 50.7 20.25 45.3 30.25 45.7C40.25 46.1 48.25 50.7 56.25 55.7C65.25 61.5 73.25 67.7 83.25 68.6C91.45 69.2 96.85 64.9 99.05 60.1"/><path d="M54.25 60.7Q53.45 82.55 54.75 115.3Q55.75 82.53 54.25 60.7ZM54.25 60.7Q53.95 82.54 54.75 115.3Q55.1 82.53 54.25 60.7ZM54.25 60.7L54.75 115.3"/><path d="M54.85 85.7L73.85 85.6"/></svg>

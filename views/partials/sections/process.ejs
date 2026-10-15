@@ -1,0 +1,22 @@
+<%
+  const items = (s.items || []).filter((it) => t(it.title) || t(it.text));
+-%>
+<section id="process" class="section section--process section--<%= tone %>"<% if (t(s.title)) { %> aria-labelledby="process-title"<% } %>>
+  <div class="container">
+<%- include('../section-head', { s, id: 'process', align: 'center' }) %>
+    <ol class="steps steps--<%= items.length %>">
+<% items.forEach((it, i) => { -%>
+      <li class="step" data-reveal style="--d: <%= i %>">
+        <span class="step__num" aria-hidden="true"><%= String(i + 1).padStart(2, '0') %></span>
+        <span class="step__dot" aria-hidden="true"></span>
+<% if (t(it.title)) { -%>
+        <h3 class="step__title"><%= t(it.title) %></h3>
+<% } -%>
+<% paras(it.text).forEach((p) => { -%>
+        <p class="step__text"><%= p %></p>
+<% }) -%>
+      </li>
+<% }) -%>
+    </ol>
+  </div>
+</section>

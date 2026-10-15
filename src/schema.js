@@ -62,7 +62,7 @@ const SECTION_COMMON = [
 
 const HEADING = [
   { key: 'eyebrow', type: 'text', label: 'Надзаголовок', help: 'Маленький напис над заголовком', max: 80 },
-  { key: 'title', type: 'text', label: 'Заголовок', max: 140 },
+  { key: 'title', type: 'text', label: 'Заголовок', help: 'Слово між *зірочками* буде показано елегантним курсивом, наприклад: Подорож *під ключ*', max: 140 },
 ];
 
 const SUBTITLE = { key: 'subtitle', type: 'textarea', label: 'Підзаголовок', max: 600 };
@@ -178,7 +178,7 @@ const SECTIONS = [
       {
         key: 'items', type: 'list', label: 'Відгуки', itemLabel: 'name', max: 20,
         item: [
-          { key: 'name', type: 'string', label: 'Ім’я клієнта', max: 60 },
+          { key: 'name', type: 'text', label: 'Ім’я клієнта', help: 'Для англійської версії — латиницею, наприклад: Olena & Andriy', max: 60 },
           { key: 'trip', type: 'text', label: 'Подорож', help: 'Наприклад: Мальдіви, 2025', max: 60 },
           { key: 'text', type: 'textarea', label: 'Текст відгуку', max: 1200 },
           { key: 'photo', type: 'image', label: 'Фото клієнта', help: 'Необов’язково' },

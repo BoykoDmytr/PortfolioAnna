@@ -1,0 +1,8 @@
+<% if (langs.length > 1) { -%>
+      <nav class="<%= switchCls %>" aria-label="<%= kit.L.language %>">
+<% langs.forEach((l, i) => { -%>
+<% if (i > 0) { %><span class="lang-switch__sep" aria-hidden="true"></span><% } -%>
+        <a class="lang-switch__link" href="<%= l.href %>" hreflang="<%= l.code %>" lang="<%= l.code %>" title="<%= l.label %>"<% if (l.active) { %> aria-current="true"<% } %>><%= l.short %></a>
+<% }) -%>
+      </nav>
+<% } -%>

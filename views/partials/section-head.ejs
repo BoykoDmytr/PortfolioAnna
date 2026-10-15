@@ -1,0 +1,27 @@
+<%
+  // Заголовок секції: надзаголовок із хвилею (як у монограмі), h2 і підзаголовок.
+  // Параметри: s (дані секції), id (тип секції), align: 'center' | 'left' | 'split', light (bool)
+  const headAlign = typeof align !== 'undefined' ? align : 'left';
+  const eyebrowText = t(s.eyebrow);
+  const titleText = t(s.title);
+  const subParas = s.subtitle ? paras(s.subtitle) : [];
+-%>
+<% if (eyebrowText || titleText || subParas.length) { -%>
+<header class="section-head section-head--<%= headAlign %>" data-reveal>
+  <div class="section-head__main">
+<% if (eyebrowText) { -%>
+    <p class="eyebrow"><%- include('wave', { waveCls: 'eyebrow__wave' }) %><span><%= eyebrowText %></span></p>
+<% } -%>
+<% if (titleText) { -%>
+    <h2 class="section-title" id="<%= id %>-title"><%- kit.emph(titleText) %></h2>
+<% } -%>
+  </div>
+<% if (subParas.length) { -%>
+  <div class="section-head__aside">
+<% subParas.forEach((p) => { -%>
+    <p class="section-lead"><%= p %></p>
+<% }) -%>
+  </div>
+<% } -%>
+</header>
+<% } -%>

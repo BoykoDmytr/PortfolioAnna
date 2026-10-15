@@ -1,0 +1,50 @@
+<%
+  // Сторінка 404. Працює і з повною view-model (buildViewModel), і без жодних змінних.
+  const vmLang = locals.lang === 'en' ? 'en' : 'uk';
+  const en = vmLang === 'en';
+  const assetUrl = typeof locals.asset === 'function' ? locals.asset : (p) => p;
+  const brandInfo = locals.brand || { name: 'ANNA FROLOVA', tagline: 'TRAVEL' };
+  const langList = Array.isArray(locals.langs) ? locals.langs : [];
+  const homeHref = ((langList.find((l) => l.active) || langList[0]) || { href: en ? '/en/' : '/' }).href;
+  const preset = locals.themePreset || 'sand';
+  const style = locals.themeStyle || '';
+  const brandLine = [brandInfo.name, brandInfo.tagline].filter(Boolean).join(' ');
+  const copy = en
+    ? { title: 'Page not found', text: 'It seems this route is not on our map. Let’s head back to the start of the journey.', back: 'Back to home', eyebrow: 'Error 404' }
+    : { title: 'Сторінку не знайдено', text: 'Схоже, цього маршруту немає на нашій мапі. Повернімося на початок подорожі.', back: 'На головну', eyebrow: 'Помилка 404' };
+  let monogram = '';
+  try { monogram = include('partials/monogram', { cls: 'notfound__mark' }); } catch (e) { monogram = ''; }
+-%>
+<!doctype html>
+<html lang="<%= vmLang %>" data-theme="<%= preset %>"<% if (style) { %> style="<%= style %>"<% } %>>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <title><%= copy.title %> — <%= brandLine %></title>
+  <link rel="icon" href="<%= assetUrl('/assets/img/favicon.svg') %>" type="image/svg+xml">
+  <link rel="icon" href="<%= assetUrl('/assets/img/favicon-32.png') %>" type="image/png" sizes="32x32">
+  <link rel="stylesheet" href="<%= assetUrl('/assets/css/fonts.css') %>">
+  <link rel="stylesheet" href="<%= assetUrl('/assets/css/site.css') %>">
+</head>
+<body>
+  <main class="notfound" id="main">
+    <div class="notfound__inner">
+      <a class="notfound__brand" href="<%= homeHref %>" aria-label="<%= brandLine %>">
+        <%- monogram %>
+        <span class="footer-brand__word" aria-hidden="true">
+          <span class="footer-brand__name"><%= brandInfo.name %></span>
+<% if (brandInfo.tagline) { -%>
+          <span class="footer-brand__tagline"><%= brandInfo.tagline %></span>
+<% } -%>
+        </span>
+      </a>
+      <p class="eyebrow notfound__eyebrow"><%- include('partials/wave', { waveCls: 'eyebrow__wave' }) %><span><%= copy.eyebrow %></span></p>
+      <h1 class="notfound__title">4<em>0</em>4</h1>
+      <p class="notfound__subtitle"><%= copy.title %></p>
+      <p class="notfound__text"><%= copy.text %></p>
+      <a class="btn btn--primary" href="<%= homeHref %>"><%= copy.back %></a>
+    </div>
+  </main>
+</body>
+</html>

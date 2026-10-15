@@ -1,0 +1,24 @@
+<%
+  const items = (s.items || []).filter((it) => t(it.title) || t(it.text));
+-%>
+<section id="services" class="section section--services section--<%= tone %>"<% if (t(s.title)) { %> aria-labelledby="services-title"<% } %>>
+  <div class="container">
+<%- include('../section-head', { s, id: 'services', align: 'split' }) %>
+    <ul class="services services--<%= items.length %>">
+<% items.forEach((it, i) => { -%>
+      <li class="service" data-reveal style="--d: <%= i % 3 %>">
+        <div class="service__top">
+          <span class="service__icon"><%- icon(it.icon) %></span>
+          <span class="service__num" aria-hidden="true"><%= String(i + 1).padStart(2, '0') %></span>
+        </div>
+<% if (t(it.title)) { -%>
+        <h3 class="service__title"><%= t(it.title) %></h3>
+<% } -%>
+<% paras(it.text).forEach((p) => { -%>
+        <p class="service__text"><%= p %></p>
+<% }) -%>
+      </li>
+<% }) -%>
+    </ul>
+  </div>
+</section>

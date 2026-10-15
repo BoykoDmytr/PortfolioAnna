@@ -1,0 +1,30 @@
+<%
+  const items = (s.items || []).filter((it) => t(it.question));
+-%>
+<section id="faq" class="section section--faq section--<%= tone %>"<% if (t(s.title)) { %> aria-labelledby="faq-title"<% } %>>
+  <div class="container faq">
+    <div class="faq__intro">
+<%- include('../section-head', { s, id: 'faq', align: 'left' }) %>
+<% if (kit.shownTypes.includes('contact') && messengers.length) { const m = messengers[0]; -%>
+      <a class="text-link faq__ask" href="#contact" data-reveal style="--d: 1"><%- icon('chat') %><span><%= kit.ui('contactMe') || m.label %></span></a>
+<% } -%>
+    </div>
+    <div class="faq__list">
+<% items.forEach((it, i) => { -%>
+      <details class="faq__item" data-reveal style="--d: <%= Math.min(i, 4) %>">
+        <summary class="faq__q">
+          <span class="faq__q-text"><%= t(it.question) %></span>
+          <span class="faq__toggle" aria-hidden="true"><%- icon('plus') %></span>
+        </summary>
+        <div class="faq__a">
+          <div class="faq__a-inner">
+<% paras(it.answer).forEach((p) => { -%>
+            <p><%= p %></p>
+<% }) -%>
+          </div>
+        </div>
+      </details>
+<% }) -%>
+    </div>
+  </div>
+</section>

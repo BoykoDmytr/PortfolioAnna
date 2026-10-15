@@ -1,0 +1,29 @@
+<%
+  const items = (s.items || []).filter((it) => t(it.title) || it.image);
+-%>
+<section id="certificates" class="section section--certificates section--<%= tone %>"<% if (t(s.title)) { %> aria-labelledby="certificates-title"<% } %>>
+  <div class="container">
+<%- include('../section-head', { s, id: 'certificates', align: 'split' }) %>
+    <ul class="certs certs--<%= items.length %>">
+<% items.forEach((it, i) => { const photo = img(it.image); const title = t(it.title); const meta = [t(it.issuer), it.year].filter(Boolean).join(' · '); -%>
+      <li class="cert" data-reveal style="--d: <%= i % 4 %>">
+<% if (photo) { -%>
+        <a class="cert__media" href="<%= photo %>" data-lightbox="certificates" data-caption="<%= [title, meta].filter(Boolean).join(' — ') %>" aria-label="<%= title ? kit.L.openPhoto + ': ' + title : kit.L.openPhoto %>">
+          <img class="cert__img" src="<%= photo %>" alt="<%= title %>" loading="lazy" decoding="async">
+        </a>
+<% } else { -%>
+        <div class="cert__media cert__media--empty" aria-hidden="true"><%- icon('star', 'icon cert__seal') %></div>
+<% } -%>
+        <div class="cert__body">
+<% if (title) { -%>
+          <h3 class="cert__title"><%= title %></h3>
+<% } -%>
+<% if (meta) { -%>
+          <p class="cert__meta"><%= meta %></p>
+<% } -%>
+        </div>
+      </li>
+<% }) -%>
+    </ul>
+  </div>
+</section>

@@ -1,0 +1,59 @@
+<%
+  const heroImg = img(s.image);
+  const heroTitle = t(s.title) || [brand.name, brand.tagline].filter(Boolean).join(' ');
+  const overlay = Math.max(0, Math.min(80, Number(s.overlay) || 0)) / 100;
+  const nextType = kit.shownTypes[1];
+  const showSecondary = t(s.secondaryCta) && kit.shownTypes.includes('destinations');
+  const showPrimary = t(s.primaryCta) && kit.shownTypes.includes('contact');
+  const place = t(contacts.city);
+-%>
+<section id="hero" class="section section--hero hero<%= heroImg ? '' : ' hero--no-image' %>" style="--overlay: <%= overlay.toFixed(2) %>" aria-labelledby="hero-title">
+  <div class="hero__media" aria-hidden="true">
+<% if (heroImg) { -%>
+    <img class="hero__img" src="<%= heroImg %>" alt="" fetchpriority="high" decoding="async">
+<% } -%>
+    <span class="hero__shade"></span>
+  </div>
+
+  <div class="hero__inner">
+    <div class="hero__content">
+<% if (t(s.eyebrow)) { -%>
+      <p class="eyebrow eyebrow--hero hero__anim" style="--d: 1"><%- include('../wave', { waveCls: 'eyebrow__wave' }) %><span><%= t(s.eyebrow) %></span></p>
+<% } -%>
+      <h1 class="hero__title hero__anim" id="hero-title" style="--d: 2"><%- kit.emph(heroTitle) %></h1>
+<% paras(s.subtitle).forEach((p) => { -%>
+      <p class="hero__lead hero__anim" style="--d: 3"><%= p %></p>
+<% }) -%>
+<% if (showPrimary || showSecondary) { -%>
+      <div class="hero__actions hero__anim" style="--d: 4">
+<% if (showPrimary) { -%>
+        <a class="btn btn--light" href="#contact"><%= t(s.primaryCta) %></a>
+<% } -%>
+<% if (showSecondary) { -%>
+        <a class="btn btn--ghost-light" href="#destinations"><%= t(s.secondaryCta) %><%- icon('arrow-right', 'icon btn__icon') %></a>
+<% } -%>
+      </div>
+<% } -%>
+    </div>
+
+    <div class="hero__foot hero__anim" style="--d: 5">
+<% if (nextType) { -%>
+      <a class="hero__scroll" href="#<%= nextType %>"><span class="hero__scroll-line" aria-hidden="true"></span><span class="hero__scroll-text"><%= kit.L.scroll %></span></a>
+<% } -%>
+<% if (place || messengers.length) { -%>
+      <div class="hero__meta">
+<% if (place) { -%>
+        <span class="hero__place"><%- icon('pin', 'icon') %><%= place %></span>
+<% } -%>
+<% if (messengers.length) { -%>
+        <ul class="hero__social">
+<% messengers.filter((m) => m.key !== 'phone').forEach((m) => { -%>
+          <li><a class="icon-link icon-link--light" href="<%= m.href %>"<% if (/^https:/.test(m.href)) { %> target="_blank" rel="noopener"<% } %> aria-label="<%= m.label || m.display %>"><%- icon(m.key) %></a></li>
+<% }) -%>
+        </ul>
+<% } -%>
+      </div>
+<% } -%>
+    </div>
+  </div>
+</section>

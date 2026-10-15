@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#f8f4ef">
+  <meta name="color-scheme" content="light">
+  <title>Адмін-панель · ANNA FROLOVA TRAVEL</title>
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png">
+  <link rel="stylesheet" href="../assets/css/fonts.css">
+  <link rel="stylesheet" href="admin.css">
+  <script type="module" src="js/main.js"></script>
+</head>
+<body>
+  <noscript>
+    <p class="noscript">Для роботи адмін-панелі потрібен JavaScript. Увімкніть його в налаштуваннях браузера й оновіть сторінку.</p>
+  </noscript>
+
+  <div class="boot" id="boot" role="status">
+    <span class="spinner" aria-hidden="true"></span>
+    <span class="boot__text" id="boot-text">Завантаження…</span>
+    <button type="button" class="btn btn--secondary" id="boot-retry" hidden><span class="btn__label">Спробувати ще раз</span></button>
+  </div>
+
+  <!-- Вхід -->
+  <section class="login" id="login" hidden aria-labelledby="login-title">
+    <div class="login__card">
+      <div class="login__brand">
+        <img class="login__mark js-mark" src="../assets/img/monogram.svg" alt="" width="84" height="84">
+        <p class="wordmark"><span class="wordmark__name">ANNA FROLOVA</span><span class="wordmark__tag">TRAVEL</span></p>
+      </div>
+      <h1 class="login__title" id="login-title">Вхід до адмін-панелі</h1>
+      <p class="login__notice" id="login-notice" hidden></p>
+      <form class="login__form" id="login-form" novalidate>
+        <div class="field">
+          <div class="field__head"><label class="field__label" for="login-password">Пароль</label></div>
+          <div class="input-wrap">
+            <input class="input input--lg" id="login-password" type="password" name="password" autocomplete="current-password" required>
+            <button type="button" class="input-action" id="login-toggle" aria-label="Показати пароль" title="Показати пароль" aria-pressed="false"></button>
+          </div>
+          <p class="field__error" id="login-error" role="alert" hidden></p>
+        </div>
+        <button type="submit" class="btn btn--primary btn--lg btn--block" id="login-submit"><span class="btn__label">Увійти</span></button>
+      </form>
+      <p class="login__help">Забули пароль? Як його скинути, описано в інструкції до сайту (файл README).</p>
+    </div>
+    <a class="login__back" href="../">← На сайт</a>
+  </section>
+
+  <!-- Адмін-панель -->
+  <div class="app" id="app" hidden>
+    <aside class="sidebar" id="sidebar" aria-label="Розділи адмін-панелі">
+      <div class="sidebar__brand">
+        <img class="sidebar__mark js-mark" src="../assets/img/monogram.svg" alt="" width="40" height="40">
+        <p class="wordmark wordmark--sm"><span class="wordmark__name">ANNA FROLOVA</span><span class="wordmark__tag">TRAVEL · АДМІН</span></p>
+        <button type="button" class="icon-btn sidebar__close" id="drawer-close" aria-label="Закрити меню"></button>
+      </div>
+      <nav class="sidebar__nav" id="nav" aria-label="Основне меню"></nav>
+      <div class="sidebar__foot">
+        <a class="sidebar__site" href="../" target="_blank" rel="noopener" data-site="uk"><span>Відкрити сайт</span></a>
+        <a class="sidebar__site sidebar__site--en" href="../en/" target="_blank" rel="noopener" data-site="en" aria-label="Відкрити англійську версію сайту"><span>EN</span></a>
+        <button type="button" class="sidebar__logout" id="logout-btn-side"><span>Вийти</span></button>
+      </div>
+    </aside>
+    <div class="scrim" id="scrim" hidden></div>
+
+    <div class="main">
+      <header class="topbar">
+        <button type="button" class="icon-btn topbar__menu" id="menu-btn" aria-label="Відкрити меню" aria-controls="sidebar" aria-expanded="false"></button>
+        <div class="topbar__heading">
+          <p class="topbar__title" id="topbar-title"></p>
+        </div>
+        <div class="topbar__site">
+          <a class="topbar__link" href="../" target="_blank" rel="noopener" data-site="uk" title="Відкрити сайт у новій вкладці"><span class="topbar__link-text">Відкрити сайт</span><span class="topbar__link-short">Сайт</span></a>
+          <a class="topbar__link topbar__link--en" href="../en/" target="_blank" rel="noopener" data-site="en" title="Англійська версія сайту">EN</a>
+        </div>
+        <div class="savebar" id="savebar" data-state="clean">
+          <p class="savebar__state" id="save-state" aria-live="polite"></p>
+          <div class="savebar__actions">
+            <button type="button" class="btn btn--ghost btn--sm savebar__discard" id="discard-btn" hidden><span class="btn__label">Скасувати</span></button>
+            <button type="button" class="btn btn--primary savebar__save" id="save-btn" disabled><span class="btn__label">Зберегти зміни</span></button>
+          </div>
+        </div>
+        <button type="button" class="icon-btn topbar__logout" id="logout-btn" aria-label="Вийти з адмін-панелі" title="Вийти"></button>
+      </header>
+
+      <div class="banner" id="pw-banner" role="note" hidden>
+        <p class="banner__text">Ви використовуєте стандартний пароль — змініть його в розділі «Безпека».</p>
+        <a class="btn btn--secondary btn--sm" href="#/security"><span class="btn__label">Змінити пароль</span></a>
+      </div>
+
+      <main class="view" id="view" tabindex="-1"></main>
+    </div>
+  </div>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+</body>
+</html>

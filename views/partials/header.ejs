@@ -1,0 +1,70 @@
+<%
+  const brandLabel = [brand.name, brand.tagline].filter(Boolean).join(' ') || 'Home';
+-%>
+<header class="site-header" data-header>
+  <div class="site-header__inner">
+    <a class="brand" href="<%= kit.homeHref %>" aria-label="<%= brandLabel %> — <%= kit.L.home %>">
+<% if (brand.logo) { -%>
+      <img class="brand__logo" src="<%= brand.logo %>" alt="" decoding="async">
+<% } else { -%>
+      <%- kit.mark('brand__mark') %>
+<% } -%>
+<% if (brand.name) { -%>
+      <span class="brand__word" aria-hidden="true">
+        <span class="brand__name"><%= brand.name %></span>
+<% if (brand.tagline) { -%>
+        <span class="brand__tagline"><%= brand.tagline %></span>
+<% } -%>
+      </span>
+<% } -%>
+    </a>
+
+<% if (kit.navItems.length) { -%>
+    <nav class="site-nav" aria-label="<%= kit.L.mainNav %>">
+      <ul class="site-nav__list">
+<% kit.navItems.forEach((item) => { -%>
+        <li><a class="site-nav__link" href="#<%= item.id %>" data-nav-link><%= item.label %></a></li>
+<% }) -%>
+      </ul>
+    </nav>
+<% } -%>
+
+    <div class="site-header__actions">
+<%- include('lang-switch', { kit, switchCls: 'lang-switch lang-switch--header' }) %>
+<% if (kit.shownTypes.includes('contact') && u('navCta')) { -%>
+      <a class="btn btn--sm btn--header" href="#contact"><%= u('navCta') %></a>
+<% } -%>
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="mobile-menu"
+        data-menu-toggle data-label-open="<%= kit.ui('menu') %>" data-label-close="<%= kit.ui('close') %>" aria-label="<%= kit.ui('menu') %>">
+        <span class="menu-toggle__bars" aria-hidden="true"><span></span><span></span></span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<div class="mobile-menu" id="mobile-menu" data-mobile-menu hidden>
+  <div class="mobile-menu__inner">
+<% if (kit.navItems.length) { -%>
+    <nav aria-label="<%= kit.L.mainNav %>">
+      <ol class="mobile-menu__list">
+<% kit.navItems.forEach((item, i) => { -%>
+        <li style="--i: <%= i %>"><a class="mobile-menu__link" href="#<%= item.id %>"><span class="mobile-menu__num"><%= String(i + 1).padStart(2, '0') %></span><%= item.label %></a></li>
+<% }) -%>
+      </ol>
+    </nav>
+<% } -%>
+    <div class="mobile-menu__foot">
+<% if (kit.shownTypes.includes('contact') && u('navCta')) { -%>
+      <a class="btn btn--primary btn--block" href="#contact"><%= u('navCta') %></a>
+<% } -%>
+<% if (messengers.length) { -%>
+      <ul class="mobile-menu__social">
+<% messengers.forEach((m) => { -%>
+        <li><a class="icon-link" href="<%= m.href %>"<% if (/^https:/.test(m.href)) { %> target="_blank" rel="noopener"<% } %> aria-label="<%= m.label || m.display %>"><%- icon(m.key) %></a></li>
+<% }) -%>
+      </ul>
+<% } -%>
+<%- include('lang-switch', { kit, switchCls: 'lang-switch lang-switch--menu' }) %>
+    </div>
+  </div>
+</div>

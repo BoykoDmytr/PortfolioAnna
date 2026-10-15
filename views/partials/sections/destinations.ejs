@@ -1,0 +1,43 @@
+<%
+  const items = (s.items || []).filter((it) => t(it.name) || it.image);
+  const canAsk = kit.shownTypes.includes('contact') && formEnabled;
+-%>
+<section id="destinations" class="section section--destinations section--<%= tone %>"<% if (t(s.title)) { %> aria-labelledby="destinations-title"<% } %>>
+  <div class="container">
+<%- include('../section-head', { s, id: 'destinations', align: 'split' }) %>
+  </div>
+  <div class="dest-wrap">
+    <ul class="dest-grid dest-grid--<%= items.length %>">
+<% items.forEach((it, i) => { const photo = img(it.image); const name = t(it.name); -%>
+      <li class="dest" data-reveal style="--d: <%= i % 4 %>">
+        <div class="dest__media<%= photo ? '' : ' dest__media--empty' %>">
+<% if (photo) { -%>
+          <img class="dest__img" src="<%= photo %>" alt="<%= name %>" loading="lazy" decoding="async">
+<% } else { -%>
+          <%- kit.mark('dest__placeholder') %>
+<% } -%>
+<% if (t(it.tag)) { -%>
+          <span class="dest__tag"><%= t(it.tag) %></span>
+<% } -%>
+<% if (canAsk && name && u('navCta')) { -%>
+          <a class="dest__ask" href="#contact" data-destination="<%= name %>" aria-label="<%= u('navCta') %>: <%= name %>"><%- icon('arrow-up-right') %></a>
+<% } -%>
+        </div>
+        <div class="dest__body">
+          <div class="dest__heading">
+<% if (name) { -%>
+            <h3 class="dest__name"><%= name %></h3>
+<% } -%>
+<% if (t(it.price)) { -%>
+            <p class="dest__price"><%= t(it.price) %></p>
+<% } -%>
+          </div>
+<% paras(it.text).forEach((p) => { -%>
+          <p class="dest__text"><%= p %></p>
+<% }) -%>
+        </div>
+      </li>
+<% }) -%>
+    </ul>
+  </div>
+</section>

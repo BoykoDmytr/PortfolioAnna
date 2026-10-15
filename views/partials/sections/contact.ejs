@@ -1,0 +1,133 @@
+<%
+  const photo = img(s.image);
+  const textParas = paras(s.text);
+  const details = [
+    links.phone && { key: 'phone', icon: 'phone', label: kit.L.phone, value: links.phone.display, href: links.phone.href },
+    links.email && { key: 'email', icon: 'mail', label: kit.L.email, value: links.email.display, href: links.email.href },
+    t(contacts.city) && { key: 'city', icon: 'pin', label: kit.L.city, value: t(contacts.city) },
+    t(contacts.hours) && { key: 'hours', icon: 'clock', label: kit.L.hours, value: t(contacts.hours) },
+  ].filter(Boolean);
+  const req = `<span class="field__req" aria-hidden="true">*</span><span class="visually-hidden"> (${kit.esc(kit.L.required)})</span>`;
+  const okStatus = formEnabled && leadStatus === 'ok';
+  const errStatus = formEnabled && leadStatus === 'error';
+-%>
+<section id="contact" class="section section--contact section--<%= tone %>"<% if (t(s.title)) { %> aria-labelledby="contact-title"<% } %>>
+  <div class="container">
+    <div class="contact<%= formEnabled ? ' contact--with-form' : ' contact--no-form' %><%= photo ? ' contact--with-image' : '' %>">
+<% if (photo && !formEnabled) { -%>
+      <div class="contact__visual" data-reveal>
+        <div class="arch arch--soft"><img class="arch__img" src="<%= photo %>" alt="<%= [brand.name, brand.tagline].filter(Boolean).join(' ') %>" loading="lazy" decoding="async"></div>
+      </div>
+<% } -%>
+      <div class="contact__info<%= photo && formEnabled ? ' contact__info--badge' : '' %>">
+<% if (photo && formEnabled) { -%>
+        <div class="contact__badge" data-reveal>
+          <div class="arch"><img class="arch__img" src="<%= photo %>" alt="<%= [brand.name, brand.tagline].filter(Boolean).join(' ') %>" loading="lazy" decoding="async"></div>
+        </div>
+<% } -%>
+<%- include('../section-head', { s, id: 'contact', align: 'left' }) %>
+<% if (textParas.length) { -%>
+        <div class="contact__text" data-reveal style="--d: 1">
+<% textParas.forEach((p) => { -%>
+          <p><%= p %></p>
+<% }) -%>
+        </div>
+<% } -%>
+<% if (t(s.note)) { -%>
+        <p class="contact__note" data-reveal style="--d: 1"><span class="pulse" aria-hidden="true"></span><%= t(s.note) %></p>
+<% } -%>
+<% if (messengers.length) { -%>
+        <ul class="messengers messengers--<%= messengers.length %>" aria-label="<%= kit.L.messengers %>">
+<% messengers.forEach((m, i) => { -%>
+          <li data-reveal style="--d: <%= i %>">
+            <a class="messenger messenger--<%= m.key %>" href="<%= m.href %>"<% if (/^https:/.test(m.href)) { %> target="_blank" rel="noopener"<% } %>>
+              <span class="messenger__icon"><%- icon(m.key) %></span>
+              <span class="messenger__text">
+                <span class="messenger__label"><%= m.label || m.display %></span>
+                <span class="messenger__handle"><%= m.display %></span>
+              </span>
+              <%- icon('arrow-up-right', 'icon messenger__arrow') %>
+            </a>
+          </li>
+<% }) -%>
+        </ul>
+<% } -%>
+<% if (details.length) { -%>
+        <ul class="contact-details" data-reveal style="--d: 2">
+<% details.forEach((d) => { -%>
+          <li class="contact-details__item">
+            <%- icon(d.icon) %>
+            <span class="contact-details__label"><%= d.label %></span>
+<% if (d.href) { -%>
+            <a class="contact-details__value" href="<%= d.href %>"><%= d.value %></a>
+<% } else { -%>
+            <span class="contact-details__value"><%= d.value %></span>
+<% } -%>
+          </li>
+<% }) -%>
+        </ul>
+<% } -%>
+      </div>
+
+<% if (formEnabled) { -%>
+      <div class="contact__form" data-reveal style="--d: 1">
+        <div class="form-card<%= okStatus ? ' is-sent' : '' %>" data-form-card>
+          <div class="form-card__success" data-form-success<% if (!okStatus) { %> hidden<% } %> role="status">
+            <span class="form-card__check" aria-hidden="true"><%- icon('check') %></span>
+            <p class="form-card__success-text"><%= kit.ui('formSuccess') %></p>
+            <%- include('../wave', { waveCls: 'form-card__wave' }) %>
+          </div>
+<% if (!okStatus) { -%>
+<% if (t(s.formTitle)) { -%>
+          <h3 class="form-card__title"><%= t(s.formTitle) %></h3>
+<% } -%>
+          <form class="lead-form" action="<%= leadAction %>" method="post" accept-charset="utf-8" data-lead-form
+            data-msg-sending="<%= kit.ui('formSending') %>" data-msg-success="<%= kit.ui('formSuccess') %>" data-msg-error="<%= kit.ui('formError') %>">
+            <div class="lead-form__grid">
+              <div class="field">
+                <label class="field__label" for="lead-name"><%= kit.ui('formName') %><%- req %></label>
+                <input class="field__input" id="lead-name" name="name" type="text" required minlength="2" maxlength="80" autocomplete="name">
+              </div>
+              <div class="field">
+                <label class="field__label" for="lead-contact"><%= kit.ui('formContact') %><%- req %></label>
+                <input class="field__input" id="lead-contact" name="contact" type="text" required minlength="3" maxlength="100" autocomplete="tel">
+              </div>
+              <div class="field field--wide">
+                <label class="field__label" for="lead-destination"><%= kit.ui('formDestination') %></label>
+                <input class="field__input" id="lead-destination" name="destination" type="text" maxlength="120" data-destination-field>
+              </div>
+              <div class="field">
+                <label class="field__label" for="lead-dates"><%= kit.ui('formDates') %></label>
+                <input class="field__input" id="lead-dates" name="dates" type="text" maxlength="80">
+              </div>
+              <div class="field">
+                <label class="field__label" for="lead-travelers"><%= kit.ui('formTravelers') %></label>
+                <input class="field__input" id="lead-travelers" name="travelers" type="text" maxlength="40">
+              </div>
+              <div class="field field--wide">
+                <label class="field__label" for="lead-message"><%= kit.ui('formMessage') %></label>
+                <textarea class="field__input field__input--area" id="lead-message" name="message" rows="3" maxlength="1000"></textarea>
+              </div>
+            </div>
+            <input type="hidden" name="lang" value="<%= lang %>">
+            <div class="hp" aria-hidden="true">
+              <label for="lead-website">Website</label>
+              <input id="lead-website" name="website" type="text" tabindex="-1" autocomplete="off">
+            </div>
+<% if (u('formConsent')) { -%>
+            <p class="lead-form__consent"><%= u('formConsent') %></p>
+<% } -%>
+            <div class="lead-form__actions">
+              <button class="btn btn--primary btn--block lead-form__submit" type="submit" data-submit>
+                <span data-submit-label><%= kit.ui('formSubmit') %></span><%- icon('arrow-right', 'icon btn__icon') %>
+              </button>
+            </div>
+            <p class="form-status<%= errStatus ? ' is-error' : '' %>" data-form-status role="status" aria-live="polite"><%= errStatus ? kit.ui('formError') : '' %></p>
+          </form>
+<% } -%>
+        </div>
+      </div>
+<% } -%>
+    </div>
+  </div>
+</section>
