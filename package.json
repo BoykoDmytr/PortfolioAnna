@@ -1,0 +1,25 @@
+{
+  "name": "anna-frolova-travel",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Сайт-портфоліо ANNA FROLOVA TRAVEL з адмін-панеллю",
+  "main": "server.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test test/",
+    "export": "node scripts/export-static.js"
+  },
+  "dependencies": {
+    "@fontsource/cormorant-garamond": "^5.3.0",
+    "@fontsource/montserrat": "^5.3.0",
+    "ejs": "^7.0.1",
+    "express": "^4.22.3",
+    "multer": "^2.4.0",
+    "sharp": "^0.35.5"
+  }
+}
